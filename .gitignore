@@ -1,0 +1,47 @@
+# FRIDAY:GITIGNORE:START
+# Managed automatically by FRIDAY. Add project-specific rules outside this block.
+# FRIDAY project-local resources and state
+friday.md
+FRIDAY.md
+.friday/
+.friday-memory.md
+*.friday.local.*
+
+# Secrets and machine-local configuration
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.cookies
+
+# Logs, operating-system files, caches, and test output
+*.log
+logs/
+.DS_Store
+Thumbs.db
+.cache/
+coverage/
+.nyc_output/
+tmp/
+.tmp/
+
+# JavaScript / TypeScript generated files
+node_modules/
+.next/
+.nuxt/
+.svelte-kit/
+.turbo/
+.parcel-cache/
+# FRIDAY:GITIGNORE:END
+
+# Project build and test artifacts
+node_modules/
+.next/
+.vercel/
+playwright-report/
+test-results/
+*.tsbuildinfo
