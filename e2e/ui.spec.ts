@@ -14,13 +14,14 @@ const categories = [
 ];
 
 const fields = [
+  { id: "field-photo", categoryId: "category-pns", key: "photo", label: "Foto", type: "photo", required: false, tableVisible: false, publicVisible: true, portalVisible: true, adminVisible: true, sortOrder: 0, active: true, system: true, version: 1 },
   { id: "field-name", categoryId: "category-pns", key: "name", label: "Nama Lengkap", type: "text", required: true, tableVisible: true, publicVisible: true, portalVisible: true, adminVisible: true, sortOrder: 1, active: true, system: true, version: 1 },
   { id: "field-nip", categoryId: "category-pns", key: "nip", label: "NIP", type: "text", required: true, tableVisible: true, publicVisible: false, portalVisible: true, adminVisible: true, sortOrder: 2, active: true, system: true, version: 1 },
   { id: "field-position", categoryId: "category-pns", key: "position", label: "Jabatan", type: "text", required: false, tableVisible: true, publicVisible: true, portalVisible: true, adminVisible: true, sortOrder: 3, active: true, system: false, version: 1 },
 ];
 
 const employees = [
-  { id: "employee-1", categoryId: "category-pns", data: { name: "Aisyah Rahma", nip: "199001012020122001", position: "Pranata Humas" }, active: true, version: 1 },
+  { id: "employee-1", categoryId: "category-pns", data: { name: "Aisyah Rahma", nip: "199001012020122001", position: "Pranata Humas" }, photoFileId: "photo-1", active: true, version: 1 },
   { id: "employee-2", categoryId: "category-pppk", data: { name: "Fajar Akbar", position: "Pengelola Sistem" }, active: true, version: 1 },
   { id: "employee-archive", categoryId: "category-pns", data: { name: "Rahma Arsip", nip: "198812122010012001" }, active: false, version: 2, deletedAt: "2026-09-29T00:00:00.000Z" },
 ];
@@ -34,6 +35,7 @@ async function mockDashboard(page: Page, actions: string[] = []) {
       "categories.list": { items: categories },
       "fields.list": { items: fields },
       "employees.list": { items: employees },
+      "files.get": { mimeType: "image/gif", base64: "R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" },
       "accounts.listPortal": { items: [{ id: "portal-1", username: "portalpegawai", displayName: "Portal Pegawai", role: "PORTAL", active: true, version: 1 }] },
       "accounts.listAdmins": { items: [] },
       "audit.list": { items: [] },
@@ -70,8 +72,13 @@ test("public landing and login follow the Kominfo design language", async ({ pag
   await expect(page.getByRole("heading", { name: "Aisyah Rahma" })).toBeVisible();
   await page.getByRole("link", { name: /Masuk ke sistem/i }).click();
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByRole("heading", { name: "Selamat datang kembali" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: /Master/ })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("heading", { name: "Masuk ke Portal" })).toBeVisible();
+  await expect(page.getByText("Portal Pegawai", { exact: true })).toBeVisible();
+  await expect(page.getByRole("tab")).toHaveCount(0);
+
+  await page.goto("/admin");
+  await expect(page.getByRole("heading", { name: "Masuk ke Ruang Admin" })).toBeVisible();
+  await expect(page.getByText("Akses khusus Admin Kominfo dan Admin Master.", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Aktifkan tema gelap" }).click();
   await expect.poll(() => page.locator("html").getAttribute("data-theme")).toBe("dark");
@@ -132,10 +139,30 @@ test("dashboard loads real workspace states and navigates to employee data", asy
   await expect(page.getByRole("button", { name: /Tambah pegawai/i })).toBeVisible();
 });
 
+test("employee detail highlights its category and supports readable text and fullscreen photo", async ({ page }) => {
+  await mockDashboard(page);
+  await page.goto("/dashboard");
+  await page.getByRole("button", { name: "Data Pegawai" }).click();
+  const row = page.getByRole("row").filter({ hasText: "Aisyah Rahma" });
+  await row.getByTitle("Lihat detail").click();
+
+  const detail = page.getByRole("dialog", { name: "Detail pegawai" });
+  await expect(detail.getByText("PNS", { exact: true })).toBeVisible();
+  await expect(detail.getByText("Pegawai Negeri Sipil", { exact: true })).toBeVisible();
+  await detail.getByRole("button", { name: "Perbesar teks detail" }).click();
+  await expect(detail.locator(".employee-detail")).toHaveAttribute("data-text-size", "large");
+
+  await detail.getByRole("button", { name: "Perbesar foto Aisyah Rahma" }).click();
+  const lightbox = page.getByRole("dialog", { name: "Foto Aisyah Rahma" });
+  await expect(lightbox).toBeVisible();
+  await lightbox.click();
+  await expect(lightbox).toBeHidden();
+});
+
 test("mobile layouts do not overflow and dashboard navigation stays usable", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/login");
-  await expect(page.getByRole("heading", { name: "Selamat datang kembali" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Masuk ke Portal" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
   await mockDashboard(page);

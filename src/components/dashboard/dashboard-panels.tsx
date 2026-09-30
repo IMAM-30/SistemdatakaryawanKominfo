@@ -9,6 +9,7 @@ import type { DashboardData } from "@/components/dashboard/dashboard-app";
 import { roleLabel } from "@/components/dashboard/dashboard-app";
 import { Icon } from "@/components/icons";
 import { downloadSnapshot, type ExportFormat, type ExportSnapshot } from "@/lib/export-data";
+import { loginPathForRole } from "@/lib/login-access";
 import { AccountEditForm, AccountForm, ConfirmDialog, EmployeeDetail, EmployeeForm, ExportDialog, Modal, PasswordForm, ResetPasswordForm, formatValue } from "@/components/dashboard/dashboard-dialogs";
 
 interface PanelProps {
@@ -183,7 +184,7 @@ export function SettingsPanel({ actor, data, refresh, notify }: PanelProps) {
   const [pendingMode, setPendingMode] = useState<string | null>(null);
   const mode = data.settings.PORTAL_MODE ?? "LOGIN_REQUIRED";
   async function changeMode() { if (!pendingMode) return; setPending(true); try { await backend("settings.update", { key: "PORTAL_MODE", value: pendingMode }, true); notify("Mode akses portal berhasil diperbarui."); setPendingMode(null); refresh(); } catch (cause) { notify(errorMessage(cause), "danger"); } finally { setPending(false); } }
-  async function changePassword(value: { currentPassword: string; password: string }) { await backend("accounts.changeOwnPassword", value, true); notify("Password berhasil diganti. Silakan masuk kembali."); window.setTimeout(() => router.replace("/login"), 900); }
+  async function changePassword(value: { currentPassword: string; password: string }) { await backend("accounts.changeOwnPassword", value, true); notify("Password berhasil diganti. Silakan masuk kembali."); window.setTimeout(() => router.replace(loginPathForRole(actor.role)), 900); }
   return <div className="settings-grid"><section className="panel settings-card"><div className="settings-card__heading"><span><Icon name="lock"/></span><div><h3>Akses portal data</h3><p>Tentukan siapa yang dapat melihat informasi kepegawaian.</p></div></div><div className="portal-modes">{[
     ["PUBLIC", "Publik", "Data yang ditandai publik dapat dilihat tanpa login."],
     ["LOGIN_REQUIRED", "Wajib login", "Hanya pengguna dengan akun Portal yang dapat mengakses."],

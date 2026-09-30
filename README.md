@@ -29,7 +29,7 @@ Deployment dan perubahan izin Google sengaja belum dilakukan karena akan dikerja
 3. Hubungkan repository ke Vercel dan gunakan preset Next.js dengan Node.js 20 atau lebih baru.
 4. Isi `APP_ENV=production`, `APPS_SCRIPT_URL`, `APPS_SCRIPT_HMAC_SECRET`, `CREDENTIAL_ENCRYPTION_KEY`, `BOOTSTRAP_SECRET`, dan `SESSION_COOKIE_NAME` pada Environment Variables Vercel.
 5. Tandai HMAC secret, encryption key, dan bootstrap secret sebagai sensitive. Jangan memakai prefix `NEXT_PUBLIC_`.
-6. Setelah deploy, periksa `/api/health`, login ketiga peran, CRUD pegawai, upload foto, akun, mode portal, ekspor Excel/PDF, serta tampilan mobile.
+6. Setelah deploy, periksa `/api/health`, login akun Portal melalui `/login`, login Admin Kominfo dan Admin Master melalui `/admin`, CRUD pegawai, upload foto, akun, mode portal, ekspor Excel/PDF, serta tampilan mobile.
 
 File `.env.local`, `*.cookies`, `.vercel`, hasil build, dan hasil test otomatis diabaikan Git.
 

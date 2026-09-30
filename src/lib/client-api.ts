@@ -1,4 +1,5 @@
 import type { SessionActor } from "@/lib/domain/types";
+import type { LoginArea } from "@/lib/login-access";
 
 interface ApiFailure {
   code: string;
@@ -43,7 +44,7 @@ export async function getSession(): Promise<SessionActor> {
   return value.actor;
 }
 
-export async function login(input: { username: string; password: string; area: "master" | "admin" | "portal" }) {
+export async function login(input: { username: string; password: string; area: LoginArea }) {
   const response = await fetch("/api/auth/login", {
     method: "POST",
     credentials: "include",

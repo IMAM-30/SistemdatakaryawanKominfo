@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import type { SessionActor } from "@/lib/domain/types";
 import { backend, ClientApiError, errorMessage, getSession, logout } from "@/lib/client-api";
+import { loginPathForRole } from "@/lib/login-access";
 import { navigationForRole, type NavigationItem, type UiAccount, type UiAudit, type UiCategory, type UiEmployee, type UiField } from "@/lib/ui-model";
 import { AppBrand } from "@/components/app-brand";
 import { Icon, type IconName } from "@/components/icons";
@@ -74,14 +75,14 @@ export function DashboardApp() {
       }
       setData({ categories: categories.items, fields: fields.items, employees: employees.items, admins, portals, audit, settings });
     } catch (cause) {
-      if (cause instanceof ClientApiError && cause.status === 401) { router.replace("/login"); return; }
+      if (cause instanceof ClientApiError && cause.status === 401) { router.replace(loginPathForRole(currentActor.role)); return; }
       setFatalError(errorMessage(cause));
     } finally { setLoading(false); setRefreshing(false); }
   }, [router]);
 
   useEffect(() => {
     let active = true;
-    getSession().then((current) => { if (!active) return; setActor(current); return loadData(current); }).catch(() => router.replace("/login"));
+    getSession().then((current) => { if (!active) return; setActor(current); return loadData(current); }).catch(() => router.replace(window.localStorage.getItem("kominfo-login-area") === "admin" ? "/admin" : "/login"));
     return () => { active = false; };
   }, [loadData, router]);
 
@@ -91,7 +92,7 @@ export function DashboardApp() {
 
   async function signOut() {
     try { await logout(); } catch { /* Clear navigation even if the remote session has expired. */ }
-    router.replace("/login");
+    router.replace(actor ? loginPathForRole(actor.role) : "/login");
   }
 
   function runGlobalSearch(event: React.FormEvent) {

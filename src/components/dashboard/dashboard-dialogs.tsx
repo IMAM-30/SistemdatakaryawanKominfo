@@ -31,6 +31,22 @@ const FIELD_GROUPS = [
   { id: "education", label: "KGB & Pendidikan", keys: ["kgb", "nextKgb", "lastEducation", "educationMajor"] },
 ];
 
+type DetailTextSize = "small" | "medium" | "large";
+const DETAIL_TEXT_SIZE_KEY = "kominfo-detail-text-size";
+const DETAIL_TEXT_SIZE_EVENT = "kominfo-detail-text-size-change";
+
+function detailTextSizeSnapshot(): DetailTextSize {
+  const saved = window.localStorage.getItem(DETAIL_TEXT_SIZE_KEY);
+  return saved === "small" || saved === "large" ? saved : "medium";
+}
+
+function subscribeDetailTextSize(onStoreChange: () => void) {
+  const listener = () => onStoreChange();
+  window.addEventListener("storage", listener);
+  window.addEventListener(DETAIL_TEXT_SIZE_EVENT, listener);
+  return () => { window.removeEventListener("storage", listener); window.removeEventListener(DETAIL_TEXT_SIZE_EVENT, listener); };
+}
+
 function groupedFields(fields: UiField[]) {
   const assigned = new Set(FIELD_GROUPS.flatMap((group) => group.keys));
   const result = FIELD_GROUPS.map((group) => ({ ...group, fields: fields.filter((field) => group.keys.includes(field.key)) })).filter((group) => group.fields.length);
@@ -99,17 +115,40 @@ function PhotoInput({ file, existing, removeExisting, onChange, onRemoveExisting
 export function EmployeeDetail({ employee, category, fields, canEdit, onClose, onEdit }: { employee: UiEmployee; category?: UiCategory; fields: UiField[]; canEdit: boolean; onClose: () => void; onEdit: () => void }) {
   const relevant = fields.filter((field) => field.categoryId === employee.categoryId && field.active);
   const groups = groupedFields(relevant);
-  return <Modal wide title="Detail pegawai" eyebrow={category?.name ?? "Data kepegawaian"} onClose={onClose}>
-    <div className="employee-detail__hero"><RemotePhoto fileId={employee.photoFileId}/><div><span className={`status-pill ${employee.active ? "status-pill--active" : "status-pill--inactive"}`}>{employee.active ? "Aktif" : "Tidak aktif"}</span><h3>{employeeName(employee)}</h3><p>{String(employee.data.nip ?? employee.data.position ?? "Informasi pegawai")}</p></div></div>
-    <div className="employee-detail__groups">{groups.map((group) => <section key={group.id}><h4>{group.label}</h4><div>{group.fields.filter((field) => field.type !== "photo").map((field) => <dl key={field.id}><dt>{field.label}</dt><dd>{formatValue(employee.data[field.key])}</dd></dl>)}</div></section>)}</div>
-    <footer className="modal__actions"><button className="button button--secondary" onClick={onClose}>Tutup</button>{canEdit && <button className="button button--primary" onClick={onEdit}><Icon name="edit" size={17}/> Edit data</button>}</footer>
+  const textSize = useSyncExternalStore(subscribeDetailTextSize, detailTextSizeSnapshot, () => "medium");
+  function updateTextSize(next: DetailTextSize) {
+    window.localStorage.setItem(DETAIL_TEXT_SIZE_KEY, next);
+    window.dispatchEvent(new Event(DETAIL_TEXT_SIZE_EVENT));
+  }
+  const name = employeeName(employee);
+  const categoryCode = category?.code === "NON_PNS" ? "Non-ASN" : category?.code ?? "Pegawai";
+  return <Modal wide title="Detail pegawai" eyebrow="Data kepegawaian" onClose={onClose}>
+    <div className="employee-detail" data-text-size={textSize}>
+      <div className="employee-detail__hero">
+        <RemotePhoto fileId={employee.photoFileId} employeeName={name}/>
+        <div className="employee-detail__identity">
+          <div className="employee-detail__badges"><span className="employee-category-badge"><strong>{categoryCode}</strong><small>{category?.name ?? "Data pegawai"}</small></span><span className={`status-pill ${employee.active ? "status-pill--active" : "status-pill--inactive"}`}>{employee.active ? "Aktif" : "Tidak aktif"}</span></div>
+          <h3>{name}</h3><p>{String(employee.data.nip ?? employee.data.position ?? "Informasi pegawai")}</p>
+        </div>
+        <div className="detail-text-control" role="group" aria-label="Ukuran teks detail">
+          <button type="button" aria-label="Perkecil teks detail" aria-pressed={textSize === "small"} onClick={() => updateTextSize("small")}>A−</button>
+          <button type="button" aria-label="Ukuran teks detail normal" aria-pressed={textSize === "medium"} onClick={() => updateTextSize("medium")}>A</button>
+          <button type="button" aria-label="Perbesar teks detail" aria-pressed={textSize === "large"} onClick={() => updateTextSize("large")}>A+</button>
+        </div>
+      </div>
+      <div className="employee-detail__groups">{groups.map((group) => <section key={group.id}><h4>{group.label}</h4><div>{group.fields.filter((field) => field.type !== "photo").map((field) => <dl key={field.id}><dt>{field.label}</dt><dd>{formatValue(employee.data[field.key])}</dd></dl>)}</div></section>)}</div>
+      <footer className="modal__actions"><button className="button button--secondary" onClick={onClose}>Tutup</button>{canEdit && <button className="button button--primary" onClick={onEdit}><Icon name="edit" size={17}/> Edit data</button>}</footer>
+    </div>
   </Modal>;
 }
 
-function RemotePhoto({ fileId }: { fileId?: string }) {
+function RemotePhoto({ fileId, employeeName: name }: { fileId?: string; employeeName: string }) {
   const [src, setSrc] = useState("");
+  const [expanded, setExpanded] = useState(false);
   useEffect(() => { if (!fileId) return; let live = true; backend<{ mimeType: string; base64: string }>("files.get", { id: fileId }).then((file) => live && setSrc(`data:${file.mimeType};base64,${file.base64}`)).catch(() => undefined); return () => { live = false; }; }, [fileId]);
-  return <div className="employee-photo">{src ? <Image src={src} width={90} height={106} unoptimized alt="Foto pegawai"/> : <Icon name="user" size={36}/>}</div>;
+  return <>{src ? <button type="button" className="employee-photo" aria-label={`Perbesar foto ${name}`} onClick={() => setExpanded(true)}><Image src={src} width={132} height={156} unoptimized alt={`Foto ${name}`}/></button> : <div className="employee-photo employee-photo--empty"><Icon name="user" size={42}/></div>}
+    {expanded && createPortal(<button type="button" className="photo-lightbox" role="dialog" aria-modal="true" aria-label={`Foto ${name}`} onClick={() => setExpanded(false)}><Image src={src} width={1200} height={1500} unoptimized alt={`Foto ${name} ukuran penuh`}/></button>, document.body)}
+  </>;
 }
 
 export function AccountForm({ kind, onClose, onSave }: { kind: "admin" | "portal"; onClose: () => void; onSave: (value: { username: string; displayName: string; password: string; active: boolean }) => Promise<void> }) {
