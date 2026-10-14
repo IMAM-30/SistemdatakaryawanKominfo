@@ -114,6 +114,17 @@ export function filterEmployees(employees: UiEmployee[], query: string, category
   });
 }
 
+const EMPLOYEE_IDENTITY_KEYS = new Set(["name", "nama", "fullName"]);
+
+export function tableFieldsForCategory(fields: UiField[], categoryId: string): UiField[] {
+  const unique = new Map<string, UiField>();
+  fields
+    .filter((field) => field.active && !field.deletedAt && field.tableVisible && !EMPLOYEE_IDENTITY_KEYS.has(field.key) && (categoryId === "all" || field.categoryId === categoryId))
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .forEach((field) => { if (!unique.has(field.key)) unique.set(field.key, field); });
+  return [...unique.values()].slice(0, 4);
+}
+
 export function resolveTheme(saved: string | null, prefersDark: boolean): ThemeMode {
   if (saved === "light" || saved === "dark") return saved;
   return prefersDark ? "dark" : "light";

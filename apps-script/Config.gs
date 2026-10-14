@@ -1,6 +1,6 @@
 var APP = Object.freeze({
   API_VERSION: '1.0.0',
-  SCHEMA_VERSION: '1',
+  SCHEMA_VERSION: '2',
   TIMEZONE: 'Asia/Makassar',
   MAX_CLOCK_SKEW_MS: 5 * 60 * 1000,
   MAX_PHOTO_BYTES: 2 * 1024 * 1024,
@@ -36,6 +36,6 @@ var INITIAL_FIELDS = {
     ['serviceYears', 'Masa Kerja Tahun', 'number'], ['serviceMonths', 'Masa Kerja Bulan', 'number'], ['lastEducation', 'Pendidikan Terakhir', 'text'],
     ['educationMajor', 'Jurusan Pendidikan Terakhir', 'text']
   ],
-  PPPK: [['photo', 'Foto', 'photo'], ['name', 'Nama', 'text'], ['position', 'Jabatan', 'text'], ['addressCity', 'Alamat Kota/Kabupaten', 'text']],
+  PPPK: [['photo', 'Foto', 'photo'], ['name', 'Nama', 'text'], ['nip', 'NIP', 'text'], ['position', 'Jabatan', 'text'], ['addressCity', 'Alamat Kota/Kabupaten', 'text']],
   NON_PNS: [['photo', 'Foto', 'photo'], ['name', 'Nama', 'text'], ['position', 'Jabatan', 'text'], ['addressCity', 'Alamat Kota/Kabupaten', 'text']]
 };

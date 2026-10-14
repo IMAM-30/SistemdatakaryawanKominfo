@@ -1,0 +1,20 @@
+# Local secrets and machine-specific state
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.cookies
+*.pem
+*.key
+*.p12
+*.pfx
+.friday/
+.friday-memory.md
+
+# Generated and test artifacts
+.next/
+node_modules/
+playwright-report/
+test-results/
+coverage/
+*.tsbuildinfo

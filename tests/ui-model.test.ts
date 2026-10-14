@@ -5,6 +5,7 @@ import {
   filterEmployees,
   navigationForRole,
   resolveTheme,
+  tableFieldsForCategory,
   type UiCategory,
   type UiEmployee,
 } from "../src/lib/ui-model";
@@ -44,6 +45,18 @@ describe("dashboard UI model", () => {
     expect(resolveTheme("light", true)).toBe("light");
     expect(resolveTheme(null, true)).toBe("dark");
     expect(resolveTheme(null, false)).toBe("light");
+  });
+
+  it("does not duplicate employee name in dynamic table columns", () => {
+    const fields = [
+      { id: "pns-name", categoryId: "pns", key: "name", label: "Nama", type: "text", required: true, tableVisible: true, publicVisible: true, portalVisible: true, adminVisible: true, sortOrder: 1, active: true, system: true, version: 1 },
+      { id: "pns-nip", categoryId: "pns", key: "nip", label: "NIP", type: "text", required: true, tableVisible: true, publicVisible: false, portalVisible: true, adminVisible: true, sortOrder: 2, active: true, system: true, version: 1 },
+      { id: "pppk-name", categoryId: "pppk", key: "name", label: "Nama", type: "text", required: true, tableVisible: true, publicVisible: true, portalVisible: true, adminVisible: true, sortOrder: 1, active: true, system: true, version: 1 },
+      { id: "pppk-nip", categoryId: "pppk", key: "nip", label: "NIP", type: "text", required: true, tableVisible: true, publicVisible: false, portalVisible: true, adminVisible: true, sortOrder: 2, active: true, system: true, version: 1 },
+    ] as const;
+
+    expect(tableFieldsForCategory([...fields], "all").map((field) => field.key)).toEqual(["nip"]);
+    expect(tableFieldsForCategory([...fields], "pppk").map((field) => field.key)).toEqual(["nip"]);
   });
 
   it("builds category-specific export sheets with stable field order", () => {
