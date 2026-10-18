@@ -8,7 +8,7 @@ import { apiError, ok, readJson } from "@/lib/server/http";
 import { requireSession } from "@/lib/server/session";
 
 const requestSchema = z.object({ action: z.string().min(1).max(80), payload: z.record(z.string(), z.unknown()).default({}) });
-const READ_ONLY = new Set(["health", "settings.public", "categories.publicList", "fields.publicList", "employees.publicList", "employees.publicGet", "files.publicGet", "categories.list", "fields.list", "employees.list", "employees.get", "files.get", "settings.get", "audit.list", "accounts.listActiveAdmins", "accounts.listPortal", "accounts.listAdmins", "export.snapshot"]);
+const READ_ONLY = new Set(["health", "settings.public", "categories.publicList", "fields.publicList", "employees.publicList", "employees.publicGet", "files.publicGet", "dashboard.snapshot", "categories.list", "fields.list", "employees.list", "employees.get", "files.get", "settings.get", "audit.list", "accounts.listActiveAdmins", "accounts.listPortal", "accounts.listAdmins", "export.snapshot"]);
 
 export async function POST(request: Request) {
   try {

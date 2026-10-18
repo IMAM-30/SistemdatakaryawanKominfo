@@ -40,9 +40,8 @@ async function mockWorkspace(page: Page, sessionActor = actor) {
     const responses: Record<string, unknown> = {
       "settings.public": { portalMode: "PUBLIC" }, "categories.publicList": { items: categories },
       "fields.publicList": { items: fields.filter((field) => field.publicVisible) }, "employees.publicList": { items: employees },
-      "categories.list": { items: categories }, "fields.list": { items: fields }, "employees.list": { items: employees },
-      "accounts.listAdmins": { items: accounts("KOMINFO_ADMIN") }, "accounts.listPortal": { items: accounts("PORTAL") },
-      "audit.list": { items: audit }, "settings.get": { PORTAL_MODE: "PUBLIC" }, "export.snapshot": { categories, fields, employees },
+      "dashboard.snapshot": { categories, fields, employees, admins: sessionActor.role === "MASTER_ADMIN" ? accounts("KOMINFO_ADMIN") : [], portals: sessionActor.role === "PORTAL" ? [] : accounts("PORTAL"), audit: sessionActor.role === "PORTAL" ? [] : audit, settings: sessionActor.role === "PORTAL" ? {} : { PORTAL_MODE: "PUBLIC" } },
+      "export.snapshot": { categories, fields, employees },
     };
     if (!(action in responses)) unexpected.push(action);
     await route.fulfill({ status: action in responses ? 200 : 400, json: { ok: action in responses, data: responses[action] ?? {}, error: { message: "Unexpected backend action in read-only UI test" } } });

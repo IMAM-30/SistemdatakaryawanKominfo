@@ -22,9 +22,7 @@ async function mockDashboard(page: Page) {
   await page.route("**/api/backend", async (route) => {
     const { action } = route.request().postDataJSON() as { action: string };
     const responses: Record<string, unknown> = {
-      "categories.list": { items: categories }, "fields.list": { items: fields }, "employees.list": { items: employees },
-      "accounts.listAdmins": { items: accounts("KOMINFO_ADMIN") }, "accounts.listPortal": { items: accounts("PORTAL") },
-      "audit.list": { items: audit }, "settings.get": { PORTAL_MODE: "PUBLIC" },
+      "dashboard.snapshot": { categories, fields, employees, admins: accounts("KOMINFO_ADMIN"), portals: accounts("PORTAL"), audit, settings: { PORTAL_MODE: "PUBLIC" } },
       "export.snapshot": { categories, fields, employees },
     };
     if (!(action in responses)) unexpected.push(action);

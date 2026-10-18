@@ -100,7 +100,7 @@ for (const area of ["admin", "portal"] as const) {
     await page.route("**/api/auth/session", (route) => route.fulfill({ json: { ok: true, data: { actor } } }));
     await page.route("**/api/backend", async (route) => {
       const { action } = route.request().postDataJSON();
-      const results: Record<string, unknown> = { "categories.list": { items: [categories[0]] }, "fields.list": { items: fields.slice(0, 2) }, "employees.list": { items: [employees[0]] }, "settings.get": { PORTAL_MODE: "PUBLIC" } };
+      const results: Record<string, unknown> = { "dashboard.snapshot": { categories: [categories[0]], fields: fields.slice(0, 2), employees: [employees[0]], admins: [], portals: [], audit: [], settings: area === "admin" ? { PORTAL_MODE: "PUBLIC" } : {} } };
       await route.fulfill({ json: { ok: true, data: results[action] ?? { items: [] } } });
     });
     await page.goto(area === "admin" ? "/admin" : "/login");
@@ -132,8 +132,7 @@ test("refreshed employee avatars follow cached replacements, removals, and ignor
       return;
     }
     const results: Record<string, unknown> = {
-      "categories.list": { items: [categories[0]] }, "fields.list": { items: fields.slice(0, 2) },
-      "employees.list": { items: [{ ...employees[0], photoFileId: currentPhoto }, { ...employees[0], id: "second-employee", photoFileId: "photo-b" }] },
+      "dashboard.snapshot": { categories: [categories[0]], fields: fields.slice(0, 2), employees: [{ ...employees[0], photoFileId: currentPhoto }, { ...employees[0], id: "second-employee", photoFileId: "photo-b" }], admins: [], portals: [], audit: [], settings: {} },
     };
     await route.fulfill({ json: { ok: true, data: results[action] } });
   });
@@ -145,7 +144,7 @@ test("refreshed employee avatars follow cached replacements, removals, and ignor
   await expect(avatars.nth(1).locator("img")).toHaveAttribute("src", `data:image/gif;base64,${photoB}`);
   const refresh = async (photo: string | undefined) => {
     currentPhoto = photo;
-    const response = page.waitForResponse((result) => result.url().endsWith("/api/backend") && result.request().postDataJSON().action === "employees.list");
+    const response = page.waitForResponse((result) => result.url().endsWith("/api/backend") && result.request().postDataJSON().action === "dashboard.snapshot");
     await page.getByRole("button", { name: "Sinkronkan data", exact: true }).click();
     await response;
     await expect(page.getByRole("button", { name: "Sinkronkan data", exact: true })).toBeEnabled();

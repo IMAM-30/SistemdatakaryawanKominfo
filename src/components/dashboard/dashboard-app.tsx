@@ -25,7 +25,6 @@ export interface DashboardData {
   settings: Record<string, string>;
 }
 
-const EMPTY_DATA: DashboardData = { categories: [], fields: [], employees: [], admins: [], portals: [], audit: [], settings: {} };
 const NAV_ICONS: Record<NavigationItem["id"], IconName> = { overview: "home", employees: "people", accounts: "accounts", fields: "fields", audit: "audit", settings: "settings" };
 const VIEW_COPY: Record<NavigationItem["id"], { title: string; description: string }> = {
   overview: { title: "Ringkasan", description: "Gambaran terkini data kepegawaian dan aktivitas sistem." },
@@ -39,7 +38,7 @@ const VIEW_COPY: Record<NavigationItem["id"], { title: string; description: stri
 export function DashboardApp() {
   const router = useRouter();
   const [actor, setActor] = useState<SessionActor | null>(null);
-  const [data, setData] = useState<DashboardData>(EMPTY_DATA);
+  const [data, setData] = useState<DashboardData | null>(null);
   const [view, setView] = useState<NavigationItem["id"]>("overview");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -48,10 +47,12 @@ export function DashboardApp() {
   const [globalSearch, setGlobalSearch] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState({ query: "", version: 0 });
   const [fatalError, setFatalError] = useState("");
+  const [sessionAttempt, setSessionAttempt] = useState(0);
   const [toast, setToast] = useState<{ tone: "success" | "danger"; message: string } | null>(null);
   const searchInput = useRef<HTMLInputElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
   const sidebar = useRef<HTMLElement>(null);
+  const loadSequence = useRef(0);
 
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
@@ -93,41 +94,41 @@ export function DashboardApp() {
   }, []);
 
   const loadData = useCallback(async (currentActor: SessionActor, background = false) => {
+    const sequence = ++loadSequence.current;
     if (background) setRefreshing(true);
     else setLoading(true);
     setFatalError("");
     try {
-      const [categories, fields, employees] = await Promise.all([
-        backend<{ items: UiCategory[] }>("categories.list", currentActor.role === "PORTAL" ? {} : { includeDeleted: true }),
-        backend<{ items: UiField[] }>("fields.list", currentActor.role === "PORTAL" ? {} : { includeDeleted: true }),
-        backend<{ items: UiEmployee[] }>("employees.list", currentActor.role === "PORTAL" ? {} : { includeDeleted: true }),
-      ]);
-      let admins: UiAccount[] = [], portals: UiAccount[] = [], audit: UiAudit[] = [], settings: Record<string, string> = {};
-      if (currentActor.role !== "PORTAL") {
-        const optional = await Promise.all([
-          backend<{ items: UiAccount[] }>("accounts.listPortal", currentActor.role === "MASTER_ADMIN" ? { includeDeleted: true } : {}).catch(() => ({ items: [] })),
-          backend<{ items: UiAudit[] }>("audit.list", { limit: 100 }).catch(() => ({ items: [] })),
-          backend<Record<string, string>>("settings.get").catch(() => ({})),
-          currentActor.role === "MASTER_ADMIN" ? backend<{ items: UiAccount[] }>("accounts.listAdmins", { includeDeleted: true }).catch(() => ({ items: [] })) : Promise.resolve({ items: [] }),
-        ]);
-        portals = optional[0].items; audit = optional[1].items; settings = optional[2]; admins = optional[3].items;
-      }
-      setData({ categories: categories.items, fields: fields.items, employees: employees.items, admins, portals, audit, settings });
+      const snapshot = await backend<DashboardData>("dashboard.snapshot");
+      if (sequence === loadSequence.current) setData(snapshot);
     } catch (cause) {
+      if (sequence !== loadSequence.current) return;
       if (cause instanceof ClientApiError && cause.status === 401) { router.replace(loginPathForRole(currentActor.role)); return; }
       setFatalError(errorMessage(cause));
-    } finally { setLoading(false); setRefreshing(false); }
+    } finally { if (sequence === loadSequence.current) { setLoading(false); setRefreshing(false); } }
   }, [router]);
 
   useEffect(() => {
     let active = true;
-    getSession().then((current) => { if (!active) return; setActor(current); return loadData(current); }).catch(() => { if (active) router.replace(getStoredPreference("kominfo-login-area") === "admin" ? "/admin" : "/login"); });
-    return () => { active = false; };
-  }, [loadData, router]);
+    getSession().then((current) => { if (!active) return; setActor(current); return loadData(current); }).catch((cause) => {
+      if (!active) return;
+      if (cause instanceof ClientApiError && (cause.status === 401 || cause.status === 403)) {
+        router.replace(getStoredPreference("kominfo-login-area") === "admin" ? "/admin" : "/login");
+        return;
+      }
+      setFatalError(errorMessage(cause));
+      setLoading(false);
+    });
+    return () => { active = false; loadSequence.current += 1; };
+  }, [loadData, router, sessionAttempt]);
 
   const navigation = useMemo(() => actor ? navigationForRole(actor.role) : [], [actor]);
   const goTo = (next: NavigationItem["id"]) => { setView(next); setSidebarOpen(false); setAccountMenu(false); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const refresh = () => actor && loadData(actor, true);
+  const retry = () => {
+    if (actor) void loadData(actor);
+    else { setFatalError(""); setLoading(true); setSessionAttempt((attempt) => attempt + 1); }
+  };
 
   async function signOut() {
     try { await logout(); } catch { /* Clear navigation even if the remote session has expired. */ }
@@ -140,7 +141,7 @@ export function DashboardApp() {
     goTo("employees");
   }
 
-  if (!actor || (loading && !data.categories.length)) return <DashboardLoading error={fatalError}/>;
+  if (!actor || !data) return <DashboardLoading error={fatalError} loading={loading} hasSession={Boolean(actor)} onRetry={retry}/>;
 
   const panelProps = { actor, data, refresh, refreshing, notify };
   return <div className="dashboard-shell">
@@ -162,7 +163,7 @@ export function DashboardApp() {
       </header>
       <main className="dashboard-content">
         <div className="dashboard-titlebar"><div><span className="eyebrow">Data Kepegawaian</span><h1>{VIEW_COPY[view].title}</h1><p>{VIEW_COPY[view].description}</p></div><button type="button" className="refresh-button" onClick={refresh} disabled={refreshing}><Icon name="restore" size={17}/><span>{refreshing ? "Menyinkronkan…" : "Sinkronkan data"}</span></button></div>
-        {fatalError && <div className="page-error"><Icon name="alert"/><div><strong>Data belum dapat dimuat</strong><p>{fatalError}</p></div><button className="button button--secondary button--small" onClick={refresh}>Coba lagi</button></div>}
+        {fatalError && <div className="page-error" role="alert"><Icon name="alert"/><div><strong>Sinkronisasi belum berhasil</strong><p>{fatalError}</p><p>Menampilkan data dari sinkronisasi terakhir yang berhasil.</p></div><button className="button button--secondary button--small" onClick={refresh} disabled={refreshing}>Coba lagi</button></div>}
         <div className="dashboard-view" key={view}>
           {view === "overview" && <OverviewPanel {...panelProps} onNavigate={goTo}/>} 
           {view === "employees" && <EmployeePanel {...panelProps} initialSearch={employeeSearch.query} searchVersion={employeeSearch.version}/>}
@@ -177,8 +178,8 @@ export function DashboardApp() {
   </div>;
 }
 
-function DashboardLoading({ error }: { error?: string }) {
-  return <main className="dashboard-loading"><AppBrand/><span className="loading-mark"><i/><i/><i/></span><h1>{error ? "Koneksi belum tersedia" : "Menyiapkan ruang kerja"}</h1><p>{error || "Memuat sesi dan data terbaru dari Google Sheets…"}</p>{error && <a className="button button--primary" href="/login">Kembali ke halaman masuk</a>}</main>;
+function DashboardLoading({ error, loading, hasSession, onRetry }: { error?: string; loading: boolean; hasSession: boolean; onRetry: () => void }) {
+  return <main className="dashboard-loading" aria-busy={loading}><AppBrand/>{loading && <span className="loading-mark" aria-hidden="true"><i/><i/><i/></span>}<h1>{error ? hasSession ? "Data belum dapat dimuat" : "Koneksi belum tersedia" : "Menyiapkan ruang kerja"}</h1><p role={error ? "alert" : "status"}>{error || "Memuat sesi dan data terbaru dari Google Sheets…"}</p>{error && <button className="button button--primary" type="button" onClick={onRetry} disabled={loading}>Coba lagi</button>}</main>;
 }
 
 export function roleLabel(role: SessionActor["role"]) { return role === "MASTER_ADMIN" ? "Admin Master" : role === "KOMINFO_ADMIN" ? "Admin Kominfo" : "Akun Portal"; }

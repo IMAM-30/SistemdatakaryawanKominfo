@@ -29,6 +29,7 @@ Login menggunakan hash `scrypt`. Salinan yang dapat dilihat sesuai kebutuhan pen
 
 ## Action utama
 
+- `dashboard.snapshot`
 - `settings.get`, `settings.update`
 - `categories.list|create|update|delete|restore`
 - `fields.list|create|update|delete|restore`
@@ -38,3 +39,16 @@ Login menggunakan hash `scrypt`. Salinan yang dapat dilihat sesuai kebutuhan pen
 - `accounts.createAdmin|updateAdmin|deleteAdmin|restoreAdmin|resetAdminPassword|revealAdminCredential`
 - `accounts.createPortal|updatePortal|deletePortal|restorePortal|resetPortalPassword|revealPortalCredential`
 - `accounts.changeOwnPassword`, `audit.list`, `export.snapshot`
+
+## Snapshot dashboard
+
+`dashboard.snapshot` adalah operasi baca untuk seluruh role yang sudah login. Satu request mengembalikan `{ categories, fields, employees, admins, portals, audit, settings }`; enam properti pertama berupa array langsung, sedangkan `settings` berupa object key/value. Dashboard menggunakan snapshot ini agar pemuatan dan sinkronisasi tidak mengirim beberapa request Apps Script bersamaan. Action individual tetap tersedia.
+
+Scope ditentukan dari actor session yang disisipkan BFF, bukan dari filter atau role dalam payload browser:
+
+- Admin Master dan Admin Kominfo menerima kategori, field, serta pegawai termasuk arsip, dengan aturan visibilitas field admin yang sama seperti action individual.
+- Admin Master menerima akun Admin Kominfo dan Portal termasuk arsip. Admin Kominfo menerima akun Portal yang belum dihapus, termasuk akun nonaktif; `admins` kosong.
+- Kedua role admin menerima 100 aktivitas terakhir dan pengaturan.
+- Portal hanya menerima kategori aktif, field Portal yang aktif, serta pegawai aktif dalam kategori aktif. `admins`, `portals`, `audit` kosong dan `settings` adalah `{}`. Mode `CLOSED` menolak seluruh snapshot.
+
+Pembacaan Sheets digunakan ulang hanya dalam request yang sama; tidak ada cache lintas-request untuk data, session, maupun izin field. Snapshot tidak membaca/menulis riwayat idempotency dan tidak mengembalikan kredensial akun.

@@ -35,14 +35,8 @@ async function mockDashboard(page: Page, actions: string[] = []) {
     const { action } = route.request().postDataJSON() as { action: string };
     actions.push(action);
     const data: Record<string, unknown> = {
-      "categories.list": { items: categories },
-      "fields.list": { items: fields },
-      "employees.list": { items: employees },
+      "dashboard.snapshot": { categories, fields, employees, admins: [], portals: [{ id: "portal-1", username: "portalpegawai", displayName: "Portal Pegawai", role: "PORTAL", active: true, version: 1 }], audit: [], settings: { PORTAL_MODE: "LOGIN_REQUIRED" } },
       "files.get": { mimeType: "image/gif", base64: "R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" },
-      "accounts.listPortal": { items: [{ id: "portal-1", username: "portalpegawai", displayName: "Portal Pegawai", role: "PORTAL", active: true, version: 1 }] },
-      "accounts.listAdmins": { items: [] },
-      "audit.list": { items: [] },
-      "settings.get": { PORTAL_MODE: "LOGIN_REQUIRED" },
       "export.snapshot": { categories, fields, employees },
       "employees.restore": { ...employees[2], deletedAt: "", active: true, version: 3 },
     };

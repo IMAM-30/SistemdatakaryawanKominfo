@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { authorizeAction } from "@/lib/server/authorization";
+import { authorizeAction, isPublicAction } from "@/lib/server/authorization";
+import { ROLES } from "@/lib/domain/types";
 
 describe("action authorization", () => {
+  it.each(ROLES)("allows the authenticated dashboard snapshot for %s", (role) => {
+    expect(authorizeAction(role, "dashboard.snapshot")).toBe(true);
+  });
+
+  it("never exposes the dashboard snapshot as a public action", () => {
+    expect(isPublicAction("dashboard.snapshot")).toBe(false);
+  });
+
   it("keeps master-only account actions unavailable to Kominfo admins", () => {
     expect(authorizeAction("MASTER_ADMIN", "accounts.revealAdminCredential")).toBe(true);
     expect(authorizeAction("KOMINFO_ADMIN", "accounts.revealAdminCredential")).toBe(false);

@@ -18,23 +18,35 @@ export async function callAppsScript<T>(action: string, payload: unknown, timeou
   const body = buildSignedEnvelope({ action, payload, secret: env.APPS_SCRIPT_HMAC_SECRET });
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  let response: Response;
   try {
-    response = await fetch(env.APPS_SCRIPT_URL, {
+    const response = await fetch(env.APPS_SCRIPT_URL, {
       method: "POST", headers: { "content-type": "text/plain;charset=utf-8", "accept": "application/json" },
       body: JSON.stringify(body), signal: controller.signal, cache: "no-store",
     });
+    if (!response.ok) throw new BackendError("BACKEND_HTTP", `Google backend returned HTTP ${response.status}`, 502);
+    let value: unknown;
+    try { value = await response.json(); }
+    catch (error) {
+      // Fetch can finish receiving headers while its JSON body is still pending.
+      // Keep the same deadline until that body has been completely consumed.
+      if (controller.signal.aborted) throw error;
+      throw new BackendError("BACKEND_RESPONSE", "Respons Google backend tidak valid.", 502);
+    }
+    if (!value || typeof value !== "object" || Array.isArray(value) || !("ok" in value) || typeof value.ok !== "boolean") {
+      throw new BackendError("BACKEND_RESPONSE", "Respons Google backend tidak valid.", 502);
+    }
+    const envelope = value as ApiEnvelope<T>;
+    if (!envelope.ok || envelope.data === undefined) {
+      const failure = envelope.error ?? { code: "BACKEND_ERROR", message: "Google backend menolak permintaan." };
+      if (typeof failure !== "object" || typeof failure.code !== "string" || typeof failure.message !== "string") {
+        throw new BackendError("BACKEND_RESPONSE", "Respons Google backend tidak valid.", 502);
+      }
+      throw new BackendError(failure.code, failure.message, STATUS_BY_CODE[failure.code] ?? 500, failure.details);
+    }
+    return envelope.data;
   } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") throw new BackendError("BACKEND_TIMEOUT", "Google backend tidak merespons tepat waktu.", 504);
+    if (error instanceof BackendError) throw error;
+    if (controller.signal.aborted || (error instanceof Error && error.name === "AbortError")) throw new BackendError("BACKEND_TIMEOUT", "Google backend tidak merespons tepat waktu.", 504);
     throw new BackendError("BACKEND_UNAVAILABLE", "Google backend tidak dapat dihubungi.", 502);
   } finally { clearTimeout(timeout); }
-  if (!response.ok) throw new BackendError("BACKEND_HTTP", `Google backend returned HTTP ${response.status}`, 502);
-  let envelope: ApiEnvelope<T>;
-  try { envelope = await response.json() as ApiEnvelope<T>; }
-  catch { throw new BackendError("BACKEND_RESPONSE", "Respons Google backend tidak valid.", 502); }
-  if (!envelope.ok || envelope.data === undefined) {
-    const failure = envelope.error ?? { code: "BACKEND_ERROR", message: "Google backend menolak permintaan." };
-    throw new BackendError(failure.code, failure.message, STATUS_BY_CODE[failure.code] ?? 500, failure.details);
-  }
-  return envelope.data;
 }

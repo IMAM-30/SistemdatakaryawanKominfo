@@ -1,6 +1,7 @@
 function route_(action, payload) {
   var routes = {
     'health': function(){return {status:'ok',apiVersion:APP.API_VERSION,schemaVersion:APP.SCHEMA_VERSION};},
+    'dashboard.snapshot':function(){return dashboardSnapshot_(payload);},
     'auth.lookup':function(){return authLookup_(payload);},'auth.bootstrapMaster':function(){return bootstrapMaster_(payload);},'auth.sessionCreate':function(){return sessionCreate_(payload);},'auth.sessionGet':function(){return sessionGet_(payload);},'auth.sessionDelete':function(){return sessionDelete_(payload);},'auth.csrfVerify':function(){return csrfVerify_(payload);},
     'settings.public':function(){return settingPublic_();},'settings.get':function(){return settingGet_(payload);},'settings.update':function(){return settingUpdate_(payload);},
     'categories.publicList':function(){return categoryList_(payload,true);},'categories.list':function(){return categoryList_(payload,false);},'categories.create':function(){return createCategory_(payload);},'categories.update':function(){return updateCategory_(payload);},'categories.delete':function(){return categoryMutation_(payload,false);},'categories.restore':function(){return categoryMutation_(payload,true);},

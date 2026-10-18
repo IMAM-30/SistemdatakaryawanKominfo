@@ -34,7 +34,7 @@ export function OverviewPanel({ actor, data, onNavigate }: PanelProps & { onNavi
   }).join(", ");
   const recent = useProgressiveList(data.audit);
   return <>
-    <section className="welcome-strip"><div><span>Selamat datang,</span><h2>{actor.displayName}</h2><p>{actor.role === "PORTAL" ? "Gunakan pencarian untuk menemukan informasi pegawai yang Anda perlukan." : "Data terbaru sudah disinkronkan dari Google Sheets."}</p></div><span className="welcome-strip__mark"><Icon name="database" size={34}/></span></section>
+    <section className="welcome-strip"><div><span>Selamat datang,</span><h2>{actor.displayName}</h2><p>{actor.role === "PORTAL" ? "Gunakan pencarian untuk menemukan informasi pegawai yang Anda perlukan." : "Ringkasan data kepegawaian yang berhasil dimuat dari Google Sheets."}</p></div><span className="welcome-strip__mark"><Icon name="database" size={34}/></span></section>
     <section className="stat-grid">
       <article className="stat-card stat-card--primary"><span className="stat-card__icon"><Icon name="people"/></span><div><small>Total Pegawai</small><strong>{stats.total}</strong><p>Data aktif seluruh kategori</p></div><i>100%</i></article>
       {activeCategories.slice(0, 3).map((category, index) => <article className="stat-card" key={category.id}><span className="stat-card__icon" style={{ color: colors[index] }}><Icon name="user"/></span><div><small>{category.code === "NON_PNS" ? "Non-ASN" : category.code}</small><strong>{stats.byCategory[category.code] ?? 0}</strong><p>{category.name}</p></div><i>{Math.round(((stats.byCategory[category.code] ?? 0) / total) * 100)}%</i></article>)}

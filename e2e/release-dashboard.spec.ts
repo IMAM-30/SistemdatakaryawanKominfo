@@ -15,8 +15,7 @@ async function mockWorkspace(page: Page) {
       return route.fulfill({ json: { ok: true, data: employee } });
     }
     const responses: Record<string, unknown> = {
-      "categories.list": { items: categories }, "fields.list": { items: fields }, "employees.list": { items: employees },
-      "accounts.listAdmins": { items: [] }, "accounts.listPortal": { items: [] }, "audit.list": { items: [] }, "settings.get": {},
+      "dashboard.snapshot": { categories, fields, employees, admins: [], portals: [], audit: [], settings: {} },
     };
     return route.fulfill({ status: action in responses ? 200 : 400, json: { ok: action in responses, data: responses[action] } });
   });

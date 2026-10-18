@@ -1,7 +1,7 @@
 import type { Role } from "@/lib/domain/types";
 
 const PUBLIC_ACTIONS = new Set(["health", "settings.public", "categories.publicList", "fields.publicList", "employees.publicList", "employees.publicGet", "files.publicGet"]);
-const PORTAL_ACTIONS = new Set(["categories.list", "fields.list", "employees.list", "employees.get", "files.get"]);
+const PORTAL_ACTIONS = new Set(["dashboard.snapshot", "categories.list", "fields.list", "employees.list", "employees.get", "files.get"]);
 const ADMIN_ACTIONS = new Set([
   "settings.get", "settings.update", "categories.create", "categories.update", "categories.delete", "categories.restore",
   "fields.create", "fields.update", "fields.delete", "fields.restore", "employees.create", "employees.update", "employees.delete",
