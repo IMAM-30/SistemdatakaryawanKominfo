@@ -210,3 +210,129 @@ describe("downloaded PDF tables", () => {
     expectCompleteGrid(pdf(), 4);
   });
 });
+
+function multiCategorySnapshot(): ExportSnapshot {
+  const categories = [
+    { id: "pns", code: "PNS", name: "Pegawai Negeri Sipil", active: true },
+    { id: "pppk", code: "PPPK", name: "Pegawai Pemerintah dengan Perjanjian Kerja", active: true },
+    { id: "non-asn", code: "NON_PNS", name: "Non ASN", active: false },
+  ];
+  return {
+    categories,
+    fields: categories.map((category) => field("name", `Nama ${category.code}`, 1, category.id)),
+    employees: categories.flatMap((category) => Array.from({ length: 12 }, (_, index) => ({
+      ...employee(`${category.id}-${index}`, { name: `Pegawai${category.code}${String(index + 1).padStart(2, "0")}` }, category.id),
+      active: index !== 11,
+    }))),
+  };
+}
+
+function captureExcelDownloads() {
+  const anchors: Array<{ href: string; download: string; click: ReturnType<typeof vi.fn> }> = [];
+  vi.stubGlobal("document", { createElement: vi.fn(() => {
+    const anchor = { href: "", download: "", click: vi.fn() };
+    anchors.push(anchor);
+    return anchor;
+  }) });
+  vi.stubGlobal("window", { setTimeout: vi.fn((callback: () => void) => { callback(); return 0; }) });
+  const createUrl = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:category-export-test");
+  vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+  return { anchors, createUrl };
+}
+
+describe("category-scoped downloads", () => {
+  beforeEach(() => { captures.pdfs.length = 0; });
+  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+  const selections = Array.from({ length: 7 }, (_, index) => ["pns", "pppk", "non-asn"].filter((_, category) => (index + 1) & (1 << category)));
+  for (const format of ["pdf", "excel"] as const) {
+    it.each(selections.map((ids) => ({ ids, label: ids.join(" + ") })))(`exports only $label to ${format}, including every row beyond the visible first ten`, async ({ ids }) => {
+      const input = multiCategorySnapshot();
+      const original = structuredClone(input);
+      const { anchors, createUrl } = captureExcelDownloads();
+      await downloadSnapshot(input, format, ids);
+      const content = format === "pdf"
+        ? captures.pdfs[0].texts.flatMap((text) => text.lines).join(" ")
+        : await (createUrl.mock.calls[0][0] as Blob).text();
+      const filename = format === "pdf" ? captures.pdfs[0].filename : anchors[0].download;
+      const suffix = ids.length === 3 ? "" : `-${ids.join("-")}`;
+      expect(filename).toMatch(new RegExp(`^data-kepegawaian${suffix}-\\d{4}-\\d{2}-\\d{2}\\.${format === "pdf" ? "pdf" : "xls"}$`));
+      input.categories.forEach((category) => {
+        const title = category.code === "NON_PNS" ? "Non-ASN" : category.code;
+        const marker = format === "pdf" ? `Data Kepegawaian - ${title}` : `<Worksheet ss:Name="${title}">`;
+        if (ids.includes(category.id)) {
+          expect(content).toContain(marker);
+          expect(content).toContain(`Nama ${category.code}`);
+          for (const item of input.employees.filter((item) => item.categoryId === category.id)) {
+            expect(content.split(String(item.data.name))).toHaveLength(2);
+          }
+        } else {
+          expect(content).not.toContain(marker);
+          expect(content).not.toContain(`Nama ${category.code}`);
+          for (const item of input.employees.filter((item) => item.categoryId === category.id)) expect(content).not.toContain(String(item.data.name));
+        }
+      });
+      expect(content).toContain("Tidak aktif");
+      expect(input).toEqual(original);
+      if (format === "pdf") expectCompleteGrid(captures.pdfs[0], 3);
+      else expect(anchors[0].click).toHaveBeenCalledOnce();
+    });
+  }
+
+  it("uses snapshot order, deduplicates selections, and exports the same categories in both formats", async () => {
+    const { anchors, createUrl } = captureExcelDownloads();
+    await downloadSnapshot(multiCategorySnapshot(), "both", ["non-asn", "pns", "pns"]);
+    const pdfContent = captures.pdfs[0].texts.flatMap((text) => text.lines).join(" ");
+    const workbook = await (createUrl.mock.calls[0][0] as Blob).text();
+    expect(pdfContent.indexOf("Data Kepegawaian - PNS")).toBeLessThan(pdfContent.indexOf("Data Kepegawaian - Non-ASN"));
+    expect(workbook.indexOf('<Worksheet ss:Name="PNS">')).toBeLessThan(workbook.indexOf('<Worksheet ss:Name="Non-ASN">'));
+    expect(workbook.match(/<Worksheet /g)).toHaveLength(2);
+    expect(captures.pdfs[0].document.getNumberOfPages()).toBe(2);
+    for (const content of [pdfContent, workbook]) {
+      expect(content).not.toContain("PegawaiPPPK");
+      expect(content).toContain("PegawaiPNS12");
+      expect(content).toContain("PegawaiNON_PNS12");
+    }
+    expect(anchors[0].download).toMatch(/^data-kepegawaian-pns-non-asn-\d{4}-\d{2}-\d{2}\.xls$/);
+    expect(captures.pdfs[0].filename).toBe(anchors[0].download.replace(/\.xls$/, ".pdf"));
+  });
+
+  it.each(["pdf", "excel", "both"] as const)("rejects empty, unknown, and deleted category selections before creating any %s files", async (format) => {
+    const { anchors, createUrl } = captureExcelDownloads();
+    const input = multiCategorySnapshot();
+    input.categories.push({ id: "deleted", code: "OLD", name: "Dihapus", active: false, deletedAt: "2026-10-18T00:00:00.000Z" });
+    await expect(downloadSnapshot(input, format, [])).rejects.toThrow("Pilih minimal satu jenis data untuk diunduh.");
+    for (const ids of [["unknown"], ["deleted"], ["pns", "unknown"], ["pppk", "deleted"]]) {
+      await expect(downloadSnapshot(input, format, ids)).rejects.toThrow("Jenis data yang dipilih sudah tidak tersedia. Muat ulang data lalu pilih kembali.");
+    }
+    expect(anchors).toHaveLength(0);
+    expect(createUrl).not.toHaveBeenCalled();
+    expect(captures.pdfs).toHaveLength(0);
+  });
+
+  it("preserves the default all-category filename and excludes deleted rows and categories", async () => {
+    const input = multiCategorySnapshot();
+    input.categories.push({ id: "deleted", code: "OLD", name: "Dihapus", active: false, deletedAt: "2026-10-18T00:00:00.000Z" });
+    input.employees.push({ ...employee("deleted-employee", { name: "PegawaiDihapus" }), deletedAt: "2026-10-18T00:00:00.000Z" });
+    const { anchors, createUrl } = captureExcelDownloads();
+    await downloadSnapshot(input, "both");
+    expect(anchors[0].download).toMatch(/^data-kepegawaian-\d{4}-\d{2}-\d{2}\.xls$/);
+    const capture = pdf();
+    const workbook = await (createUrl.mock.calls[0][0] as Blob).text();
+    expect(workbook.match(/<Worksheet /g)).toHaveLength(3);
+    expect(capture.document.getNumberOfPages()).toBe(3);
+    for (const content of [workbook, capture.texts.flatMap((text) => text.lines).join(" ")]) {
+      expect(content).not.toContain("PegawaiDihapus");
+      expect(content).not.toContain("OLD");
+    }
+  });
+
+  it("keeps partial filenames bounded and safe for custom category codes", async () => {
+    const input = multiCategorySnapshot();
+    input.categories.push({ id: "custom", code: "../../évil/" + "LongCode".repeat(30), name: "Custom", active: true });
+    const { anchors } = captureExcelDownloads();
+    await downloadSnapshot(input, "excel", ["custom"]);
+    expect(anchors[0].download).toMatch(/^data-kepegawaian-[a-z0-9-]+-\d{4}-\d{2}-\d{2}\.xls$/);
+    expect(anchors[0].download.length).toBeLessThanOrEqual(120);
+  });
+});

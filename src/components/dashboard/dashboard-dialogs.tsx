@@ -6,7 +6,7 @@ import Image from "next/image";
 import { Icon } from "@/components/icons";
 import { backend, errorMessage } from "@/lib/client-api";
 import { getStoredPreference, setStoredPreference } from "@/lib/browser-storage";
-import type { ExportFormat } from "@/lib/export-data";
+import { downloadEmployee, type ExportFormat } from "@/lib/export-data";
 import { employeeName, type UiAccount, type UiCategory, type UiEmployee, type UiField } from "@/lib/ui-model";
 
 const dialogLayers: HTMLElement[] = [];
@@ -182,8 +182,11 @@ function PhotoInput({ file, existing, removeExisting, onChange, onRemoveExisting
 }
 
 export function EmployeeDetail({ employee, category, fields, canEdit, onClose, onEdit }: { employee: UiEmployee; category?: UiCategory; fields: UiField[]; canEdit: boolean; onClose: () => void; onEdit: () => void }) {
-  const relevant = fields.filter((field) => field.categoryId === employee.categoryId && field.active);
+  const relevant = fields.filter((field) => field.categoryId === employee.categoryId && field.active && !field.deletedAt && (canEdit ? field.adminVisible : field.portalVisible)).sort((a, b) => a.sortOrder - b.sortOrder);
   const groups = groupedFields(relevant);
+  const [showExport, setShowExport] = useState(false);
+  const [downloadNotice, setDownloadNotice] = useState("");
+  const photoRequest = useRef<Promise<EmployeePhotoFile | undefined> | null>(null);
   const textSize = useSyncExternalStore(subscribeDetailTextSize, detailTextSizeSnapshot, () => "medium");
   function updateTextSize(next: DetailTextSize) {
     transientDetailTextSize = next;
@@ -192,12 +195,17 @@ export function EmployeeDetail({ employee, category, fields, canEdit, onClose, o
   }
   const name = employeeName(employee);
   const categoryCode = category?.code === "NON_PNS" ? "Non-ASN" : category?.code ?? "Pegawai";
+  async function exportEmployee(format: ExportFormat) {
+    const photo = format === "excel" ? undefined : await photoRequest.current ?? undefined;
+    await downloadEmployee({ employee, category, fields: relevant, photo }, format);
+    setDownloadNotice(`${format === "both" ? "File Excel dan PDF" : format === "excel" ? "File Excel" : "File PDF"} pegawai berhasil diunduh.${format !== "excel" && employee.photoFileId && !photo ? " Foto belum tersedia; seluruh data teks tetap disertakan." : ""}`);
+  }
   return <Modal wide title="Detail pegawai" eyebrow="Data kepegawaian" onClose={onClose}>
     <div className="employee-detail" data-text-size={textSize}>
       <div className="employee-detail__hero">
-        <RemotePhoto fileId={employee.photoFileId} employeeName={name}/>
+        <RemotePhoto key={employee.photoFileId} fileId={employee.photoFileId} employeeName={name} requestRef={photoRequest}/>
         <div className="employee-detail__identity">
-          <div className="employee-detail__badges"><span className="employee-category-badge"><strong>{categoryCode}</strong><small>{category?.name ?? "Data pegawai"}</small></span><span className={`status-pill ${employee.active ? "status-pill--active" : "status-pill--inactive"}`}>{employee.active ? "Aktif" : "Tidak aktif"}</span></div>
+          <div className="employee-detail__badges"><span className="employee-category-badge"><strong>{categoryCode}</strong><small>{category?.name ?? "Data pegawai"}</small></span><span className={`status-pill ${employee.active && !employee.deletedAt ? "status-pill--active" : "status-pill--inactive"}`}>{employee.deletedAt ? "Diarsipkan" : employee.active ? "Aktif" : "Tidak aktif"}</span></div>
           <h3>{name}</h3><p>{String(employee.data.nip ?? employee.data.position ?? "Informasi pegawai")}</p>
         </div>
         <div className="detail-text-control" role="group" aria-label="Ukuran teks detail">
@@ -206,18 +214,23 @@ export function EmployeeDetail({ employee, category, fields, canEdit, onClose, o
           <button type="button" aria-label="Perbesar teks detail" aria-pressed={textSize === "large"} onClick={() => updateTextSize("large")}>A+</button>
         </div>
       </div>
+      {canEdit && <div className="employee-detail__download"><div><strong>Simpan data pegawai ini</strong><p>Profil PDF yang mudah dibaca atau tabel Excel lengkap.</p></div><button type="button" className="button button--primary" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setDownloadNotice(""); setShowExport(true); }}><Icon name="download" size={18}/> Unduh data pegawai</button></div>}
+      {downloadNotice && <p className="employee-detail__download-notice" role="status"><Icon name="check" size={17}/>{downloadNotice}</p>}
       <div className="employee-detail__groups">{groups.map((group) => <section key={group.id}><h4>{group.label}</h4><div>{group.fields.filter((field) => field.type !== "photo").map((field) => <dl key={field.id}><dt>{field.label}</dt><dd>{formatValue(employee.data[field.key])}</dd></dl>)}</div></section>)}</div>
       <footer className="modal__actions"><button className="button button--secondary" onClick={onClose}>Tutup</button>{canEdit && <button className="button button--primary" onClick={onEdit}><Icon name="edit" size={17}/> Edit data</button>}</footer>
     </div>
+    {canEdit && showExport && <EmployeeExportDialog name={name} onClose={() => setShowExport(false)} onDownload={exportEmployee}/>}
   </Modal>;
 }
 
-function RemotePhoto({ fileId, employeeName: name }: { fileId?: string; employeeName: string }) {
+interface EmployeePhotoFile { mimeType: string; base64: string }
+
+function RemotePhoto({ fileId, employeeName: name, requestRef }: { fileId?: string; employeeName: string; requestRef: RefObject<Promise<EmployeePhotoFile | undefined> | null> }) {
   const [src, setSrc] = useState("");
   const [expanded, setExpanded] = useState(false);
   const lightbox = useRef<HTMLButtonElement>(null);
   useDialogLayer(lightbox, expanded, () => setExpanded(false));
-  useEffect(() => { if (!fileId) return; let live = true; backend<{ mimeType: string; base64: string }>("files.get", { id: fileId }).then((file) => live && setSrc(`data:${file.mimeType};base64,${file.base64}`)).catch(() => undefined); return () => { live = false; }; }, [fileId]);
+  useEffect(() => { if (!fileId) { requestRef.current = null; return; } let live = true; const request = backend<EmployeePhotoFile>("files.get", { id: fileId }).catch(() => undefined); requestRef.current = request; request.then((file) => { if (live && file) setSrc(`data:${file.mimeType};base64,${file.base64}`); }); return () => { live = false; }; }, [fileId, requestRef]);
   return <>{src ? <button type="button" className="employee-photo" aria-label={`Perbesar foto ${name}`} onClick={() => setExpanded(true)}><Image src={src} width={132} height={156} unoptimized alt={`Foto ${name}`}/></button> : <div className="employee-photo employee-photo--empty"><Icon name="user" size={42}/></div>}
     {expanded && createPortal(<button ref={lightbox} type="button" className="photo-lightbox" role="dialog" aria-modal="true" aria-label={`Foto ${name}`} onClick={() => setExpanded(false)}><Image src={src} width={1200} height={1500} unoptimized alt={`Foto ${name} ukuran penuh`}/></button>, document.body)}
   </>;
@@ -263,11 +276,62 @@ export function ResetPasswordForm({ account, onClose, onSave }: { account: UiAcc
   </form>{confirming && <ConfirmDialog danger title="Reset password akun?" description={`Password @${account.username} akan diganti dan semua sesinya dicabut.`} confirmLabel="Ya, reset" onCancel={() => setConfirming(false)} onConfirm={save} pending={pending}/>}</Modal>;
 }
 
-export function ExportDialog({ onClose, onDownload, pending }: { onClose: () => void; onDownload: (format: ExportFormat) => void; pending: boolean }) {
+function ExportFormatOptions({ format, onChange, profile = false }: { format: ExportFormat; onChange: (format: ExportFormat) => void; profile?: boolean }) {
+  const name = useId();
+  const options = [
+    ["excel", "Excel", profile ? "Tabel lengkap dengan satu baris data pegawai." : "Spreadsheet .xls yang dapat dibuka di Microsoft Excel."],
+    ["pdf", "PDF", profile ? "Profil per bagian, tanpa tabel, dengan foto jika tersedia." : "Dokumen ringkas siap dibaca dan dibagikan."],
+    ["both", "Excel + PDF", "Unduh kedua format sekaligus."],
+  ] as const;
+  return <div className="export-options">{options.map(([value, label, description]) => <label key={value} className={format === value ? "is-active" : ""}><input type="radio" name={name} value={value} checked={format === value} onChange={() => onChange(value)}/><span><strong>{label}</strong><small>{description}</small></span></label>)}</div>;
+}
+
+function EmployeeExportDialog({ name, onClose, onDownload }: { name: string; onClose: () => void; onDownload: (format: ExportFormat) => Promise<void> }) {
+  const [format, setFormat] = useState<ExportFormat>("pdf");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  async function download() {
+    if (pending) return;
+    setPending(true); setError("");
+    try { await onDownload(format); onClose(); }
+    catch (cause) { setError(errorMessage(cause)); setPending(false); }
+  }
+  return <Modal title="Unduh data pegawai ini" eyebrow="Dokumen individual" onClose={onClose} dismissible={!pending}><div className="export-dialog">
+    <div className="employee-export-identity"><span><Icon name="user" size={23}/></span><div><small>Data lengkap satu pegawai</small><strong>{name}</strong></div></div>
+    {error && <div className="form-alert employee-export-error" role="alert"><Icon name="alert" size={18}/>{error}</div>}
+    <fieldset className="export-dialog__group" disabled={pending}><legend>Format file</legend><ExportFormatOptions format={format} onChange={setFormat} profile/></fieldset>
+    <div className="modal__actions"><button type="button" className="button button--secondary" onClick={onClose} disabled={pending}>Batal</button><button type="button" className="button button--primary" onClick={download} disabled={pending}><Icon name="download" size={17}/>{pending ? "Menyiapkan…" : "Unduh"}</button></div>
+  </div></Modal>;
+}
+
+export function ExportDialog({ categories, onClose, onDownload, pending }: { categories: UiCategory[]; onClose: () => void; onDownload: (format: ExportFormat, categoryIds?: string[]) => void; pending: boolean }) {
   const [format, setFormat] = useState<ExportFormat>("excel");
-  return <Modal title="Unduh data pegawai" eyebrow="Ekspor data" onClose={onClose} dismissible={!pending}><div className="export-dialog"><p>Pilih format file. Data akan disimpan langsung ke perangkat Anda.</p><div className="export-options">
-    {([['excel', 'Excel', 'Spreadsheet .xls yang dapat dibuka di Microsoft Excel.'], ['pdf', 'PDF', 'Dokumen ringkas siap dibaca dan dibagikan.'], ['both', 'Excel + PDF', 'Unduh kedua format sekaligus.']] as const).map(([value, label, description]) => <label key={value} className={format === value ? "is-active" : ""}><input type="radio" name="export-format" value={value} checked={format === value} onChange={() => setFormat(value)}/><span><strong>{label}</strong><small>{description}</small></span></label>)}
-  </div><div className="modal__actions"><button className="button button--secondary" onClick={onClose} disabled={pending}>Batal</button><button className="button button--primary" onClick={() => onDownload(format)} disabled={pending}><Icon name="download" size={17}/>{pending ? "Menyiapkan…" : "Unduh"}</button></div></div></Modal>;
+  const [selection, setSelection] = useState<string[] | null>(null);
+  const available = categories.filter((category) => !category.deletedAt);
+  const selected = available.filter((category) => selection === null || selection.includes(category.id));
+  const allSelected = available.length > 0 && selected.length === available.length;
+  const allCheckbox = useRef<HTMLInputElement>(null);
+  const helpId = useId();
+  useEffect(() => {
+    if (allCheckbox.current) allCheckbox.current.indeterminate = selected.length > 0 && !allSelected;
+  }, [allSelected, selected.length]);
+  function toggleCategory(id: string, checked: boolean) {
+    const ids = selected.map((category) => category.id);
+    setSelection(checked ? [...ids, id] : ids.filter((value) => value !== id));
+  }
+  return <Modal title="Unduh data pegawai" eyebrow="Ekspor data" onClose={onClose} dismissible={!pending}><div className="export-dialog"><p>Pilih kategori dan format file sesuai kebutuhan Anda.</p>
+    <fieldset className="export-dialog__group" disabled={pending} aria-describedby={helpId}>
+      <legend>Kategori data</legend>
+      <p id={helpId} className="export-dialog__hint">Pilih satu kategori, gabungkan dua, atau unduh semuanya.</p>
+      <label className={`export-category export-category--all ${allSelected ? "is-active" : ""}`}><input ref={allCheckbox} type="checkbox" aria-label="Semua kategori" checked={allSelected} disabled={!available.length} onChange={(event) => setSelection(event.target.checked ? null : [])}/><span>Semua kategori</span><Icon name="database" size={17}/></label>
+      <div className="export-category-grid">{available.map((category) => {
+        const label = category.code === "NON_PNS" ? "Non-ASN" : category.code;
+        const checked = selected.some((item) => item.id === category.id);
+        return <label key={category.id} className={`export-category ${checked ? "is-active" : ""}`}><input type="checkbox" aria-label={label} checked={checked} onChange={(event) => toggleCategory(category.id, event.target.checked)}/><span>{label}</span></label>;
+      })}</div>
+      <p className={`export-selection-summary ${!selected.length ? "is-empty" : ""}`} role="status">{!available.length ? "Belum ada kategori yang dapat diunduh." : !selected.length ? "Pilih minimal satu kategori untuk diunduh." : allSelected ? "Semua kategori akan dimasukkan ke dalam file." : `Pilihan: ${selected.map((category) => category.code === "NON_PNS" ? "Non-ASN" : category.code).join(" + ")}.`}</p>
+    </fieldset>
+    <fieldset className="export-dialog__group" disabled={pending}><legend>Format file</legend><ExportFormatOptions format={format} onChange={setFormat}/></fieldset><div className="modal__actions"><button type="button" className="button button--secondary" onClick={onClose} disabled={pending}>Batal</button><button type="button" className="button button--primary" onClick={() => onDownload(format, allSelected ? undefined : selected.map((category) => category.id))} disabled={pending || !selected.length}><Icon name="download" size={17}/>{pending ? "Menyiapkan…" : "Unduh"}</button></div></div></Modal>;
 }
 
 export function PasswordForm({ onClose, onSave }: { onClose: () => void; onSave: (value: { currentPassword: string; password: string }) => Promise<void> }) {

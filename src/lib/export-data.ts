@@ -1,4 +1,4 @@
-import { buildExportSheets, type UiCategory, type UiEmployee, type UiField } from "@/lib/ui-model";
+import { buildExportSheets, employeeName, type UiCategory, type UiEmployee, type UiField } from "@/lib/ui-model";
 
 export type ExportFormat = "excel" | "pdf" | "both";
 
@@ -9,12 +9,63 @@ export interface ExportSnapshot {
   employees: UiEmployee[];
 }
 
-export async function downloadSnapshot(snapshot: ExportSnapshot, format: ExportFormat): Promise<void> {
-  const sheets = buildExportSheets(snapshot.categories, snapshot.fields, snapshot.employees);
+export interface EmployeeExportInput {
+  employee: UiEmployee;
+  category?: UiCategory;
+  /** Already scoped to the current viewer's permissions by the detail view. */
+  fields: UiField[];
+  photo?: { mimeType: string; base64: string };
+}
+
+export async function downloadEmployee(input: EmployeeExportInput, format: ExportFormat): Promise<void> {
+  const { employee } = input;
+  const fields = input.fields.filter((field) => field.categoryId === employee.categoryId && field.active && !field.deletedAt && field.type !== "photo");
+  const category = input.category?.id === employee.categoryId ? input.category : { id: employee.categoryId, code: "Pegawai", name: "Data pegawai", active: true };
+  const name = employeeName(employee).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80).replace(/-+$/, "") || "tanpa-nama";
+  const filename = `data-pegawai-${name}-${new Date().toISOString().slice(0, 10)}`;
+  if (format === "excel" || format === "both") {
+    // A detail export may include an archived person. Only copies are cleared for
+    // the shared table builder; the actual archive status is written below.
+    const sheets = buildExportSheets([{ ...category, deletedAt: undefined }], fields, [{ ...employee, deletedAt: undefined }]);
+    if (employee.deletedAt) sheets[0].rows[0][sheets[0].headers.length - 1] = "Diarsipkan";
+    downloadExcelXml(sheets, `${filename}.xls`);
+  }
+  if (format === "pdf" || format === "both") {
+    const { buildEmployeeProfilePdf } = await import("@/lib/employee-profile-pdf");
+    const document = await buildEmployeeProfilePdf({ ...input, category, fields });
+    document.save(`${filename}.pdf`);
+  }
+}
+
+export async function downloadSnapshot(snapshot: ExportSnapshot, format: ExportFormat, categoryIds?: string[]): Promise<void> {
+  const available = snapshot.categories.filter((category) => !category.deletedAt);
+  const selectedIds = categoryIds === undefined ? new Set(available.map((category) => category.id)) : new Set(categoryIds);
+  if (categoryIds !== undefined) {
+    if (!selectedIds.size) throw new Error("Pilih minimal satu jenis data untuk diunduh.");
+    const availableIds = new Set(available.map((category) => category.id));
+    if ([...selectedIds].some((id) => !availableIds.has(id))) {
+      throw new Error("Jenis data yang dipilih sudah tidak tersedia. Muat ulang data lalu pilih kembali.");
+    }
+  }
+  const categories = available.filter((category) => selectedIds.has(category.id));
+  const sheets = buildExportSheets(
+    categories,
+    snapshot.fields.filter((field) => selectedIds.has(field.categoryId)),
+    snapshot.employees.filter((employee) => selectedIds.has(employee.categoryId)),
+  );
   if (!sheets.length) throw new Error("Belum ada kategori yang dapat diekspor.");
   const stamp = new Date().toISOString().slice(0, 10);
-  if (format === "excel" || format === "both") downloadExcelXml(sheets, `data-kepegawaian-${stamp}.xls`);
-  if (format === "pdf" || format === "both") await downloadPdf(sheets, `data-kepegawaian-${stamp}.pdf`);
+  const scope = categories.length === available.length ? "" : `-${categories.map(categoryFilenameLabel).join("-").slice(0, 80).replace(/-+$/, "")}`;
+  const filename = `data-kepegawaian${scope}-${stamp}`;
+  if (format === "excel" || format === "both") downloadExcelXml(sheets, `${filename}.xls`);
+  if (format === "pdf" || format === "both") await downloadPdf(sheets, `${filename}.pdf`);
+}
+
+function categoryFilenameLabel(category: UiCategory): string {
+  const label = category.code === "NON_PNS" ? "Non-ASN" : category.code || category.name;
+  return label.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32).replace(/-+$/, "") || "kategori";
 }
 
 function downloadExcelXml(sheets: ReturnType<typeof buildExportSheets>, filename: string) {
