@@ -8,7 +8,8 @@ const photoCache = new Map<string, string>();
 
 export function EmployeeAvatar({ fileId, name, publicAccess = false }: { fileId?: string; name: string; publicAccess?: boolean }) {
   const cacheKey = fileId ? `${publicAccess ? "public" : "private"}:${fileId}` : "";
-  const [src, setSrc] = useState(() => cacheKey ? photoCache.get(cacheKey) ?? "" : "");
+  const [photo, setPhoto] = useState({ key: "", src: "" });
+  const src = cacheKey ? photoCache.get(cacheKey) ?? (photo.key === cacheKey ? photo.src : "") : "";
 
   useEffect(() => {
     if (!fileId || !cacheKey || photoCache.has(cacheKey)) return;
@@ -17,7 +18,7 @@ export function EmployeeAvatar({ fileId, name, publicAccess = false }: { fileId?
       .then((file) => {
         const next = `data:${file.mimeType};base64,${file.base64}`;
         photoCache.set(cacheKey, next);
-        if (live) setSrc(next);
+        if (live) setPhoto({ key: cacheKey, src: next });
       })
       .catch(() => undefined);
     return () => { live = false; };

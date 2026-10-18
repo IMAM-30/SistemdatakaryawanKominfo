@@ -1,0 +1,98 @@
+/* Shared visual rhythm for the public directory and operational workspace. */
+.skip-link {
+  position: fixed;
+  z-index: 200;
+  top: 12px;
+  left: 12px;
+  max-width: calc(100% - 24px);
+  padding: 12px 18px;
+  border: 1px solid var(--focus);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  color: var(--text);
+  font-size: .8rem;
+  transform: translateY(-160%);
+}
+.skip-link:focus { transform: translateY(0); }
+.public-page :is(#beranda, #layanan, #direktori) { scroll-margin-top: 100px; }
+.public-navigation { display: flex; align-items: center; gap: clamp(18px, 2.2vw, 32px); }
+.public-navigation a { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; color: var(--text-muted); font-size: .76rem; font-weight: 600; transition: color .18s ease; }
+.public-navigation a:hover { color: var(--teal-700); }
+.public-header { gap: 20px; }
+.public-header__actions .button { min-height: 42px; }
+.public-hero { min-height: 590px; border-radius: 26px; }
+.public-hero__copy { width: min(760px, 63%); padding: clamp(28px, 5.3vw, 76px); }
+.public-hero h1 { max-width: 17ch; font-size: clamp(2.35rem, 4.2vw, 4.25rem); line-height: 1.06; letter-spacing: -.045em; }
+.public-hero__copy > p { max-width: 52ch; font-size: clamp(.88rem, 1.15vw, 1rem); line-height: 1.75; }
+.public-hero__shade { background: linear-gradient(90deg, rgba(3,30,43,.97), rgba(3,35,49,.83) 45%, rgba(3,35,49,.16) 100%); }
+.public-hero__categories { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; list-style: none; padding: 0; margin: 24px 0 0; }
+.public-hero__categories li { padding: 5px 11px; border: 1px solid rgba(194,230,239,.25); border-radius: 6px; color: #d5edf3; background: rgba(15,62,78,.5); font-size: .65rem; letter-spacing: .06em; font-weight: 600; }
+.public-hero__buttons { margin-top: 27px; }
+.public-hero__buttons .button { min-height: 46px; font-size: .81rem; border-radius: 10px; }
+.public-hero__seal { border-radius: 12px; background: rgba(4,39,54,.82); }
+.section-heading h2 { font-size: clamp(1.65rem, 2.8vw, 2.55rem); line-height: 1.15; }
+.section-heading > p { font-size: .86rem; line-height: 1.7; }
+.service-grid article { min-height: 226px; padding: 27px; border-radius: 17px; box-shadow: var(--shadow-sm); }
+.service-grid article::after { opacity: .65; }
+.service-index { position: absolute; top: 28px; right: 27px; color: var(--text-muted); font-size: .72rem; font-variant-numeric: tabular-nums; letter-spacing: .1em; }
+.service-grid h3 { margin-top: 25px; font-size: 1.05rem; }
+.service-grid p { font-size: .82rem; }
+.service-grid article:nth-child(2) .service-icon { color: var(--warning); background: var(--warning-bg); }
+.service-grid article:nth-child(3) .service-icon { color: var(--success); background: var(--success-bg); }
+.public-directory { background: color-mix(in srgb, var(--surface-muted) 78%, var(--canvas)); }
+.public-directory__toolbar { border-radius: 13px; }
+.public-directory__toolbar :is(.input, .select) { font-size: .81rem; }
+.public-directory-sheet { border-radius: 16px; }
+.public-directory-details summary { border-radius: 4px; }
+.public-directory-details summary:hover { color: var(--text); }
+.public-directory-table tbody tr:focus-within { background: color-mix(in srgb, var(--focus) 9%, var(--surface-raised)); }
+.public-footer p { line-height: 1.7; }
+
+.dashboard-shell .panel { border-radius: 17px; }
+.dashboard-titlebar h1 { font-size: clamp(1.75rem, 2.5vw, 2.35rem); line-height: 1.15; }
+.dashboard-titlebar p { font-size: .8rem; }
+.dashboard-titlebar .eyebrow { font-size: .64rem; letter-spacing: .13em; }
+.dashboard-topbar { box-shadow: 0 1px 8px rgba(5,39,53,.025); }
+.global-search input { font-weight: 450; font-size: .8rem; }
+.global-search:focus-within input { border-color: var(--teal-600); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 17%, transparent); }
+.global-search kbd { font-family: inherit; font-size: .62rem; }
+.dashboard-nav button { position: relative; }
+.dashboard-nav button.is-active { background: rgba(72,157,178,.2); box-shadow: inset 0 0 0 1px rgba(146,216,231,.15); }
+.dashboard-sidebar__support { border: 1px solid rgba(255,255,255,.09); }
+.welcome-strip { min-height: 148px; border-radius: 18px; }
+.welcome-strip h2 { font-size: clamp(1.35rem, 2vw, 1.8rem); }
+.welcome-strip p { max-width: 58ch; font-size: .79rem; line-height: 1.7; }
+.welcome-strip::before { opacity: .07; }
+.stat-card { border-radius: 16px; min-height: 126px; }
+.stat-card strong { font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
+.stat-card i { font-variant-numeric: tabular-nums; }
+.panel__header h3 { font-size: .9rem; }
+.panel__header p { line-height: 1.6; }
+.data-toolbar :is(.input, .select) { font-size: .78rem; }
+.data-table tbody tr:focus-within { background: color-mix(in srgb, var(--focus) 10%, var(--surface-raised)); }
+.account-list article:hover, .field-list article:hover { background: color-mix(in srgb, var(--surface-muted) 42%, transparent); }
+.configuration-actions button:focus-visible, .table-actions button:focus-visible { outline-offset: 1px; }
+.list-more { background: color-mix(in srgb, var(--surface-muted) 42%, var(--surface-raised)); }
+.list-more .button { border-radius: 9px; box-shadow: none; }
+.modal__header { background: color-mix(in srgb, var(--surface-muted) 33%, var(--surface-raised)); }
+.modal__header h2 { letter-spacing: -.02em; }
+.modal__header > button:hover { color: var(--danger); background: var(--danger-bg); }
+
+:root[data-theme="dark"] :is(.public-page, .dashboard-shell, .modal, .toast) { --teal-700: #66b7cc; }
+:root[data-theme="dark"] :is(.public-page, .dashboard-shell, .modal) .button--primary {
+  color: #ffffff;
+  background: #287388;
+}
+:root[data-theme="dark"] :is(.public-page, .dashboard-shell, .modal) .button--primary:hover { background: #205f72; }
+:root[data-theme="dark"] :is(.dashboard-shell, .modal) :is(.mini-toggle, .toggle-row) input:checked + i { background: #287388; }
+
+@media (max-width: 900px) {
+  .public-navigation { display: none; }
+}
+@media (max-width: 600px) {
+  .public-hero h1 { font-size: clamp(2rem, 8.7vw, 3rem); }
+  .public-hero__categories { margin-top: 20px; }
+  .public-hero__categories li { font-size: .6rem; padding: 4px 9px; }
+  .public-hero__buttons .button { width: 100%; }
+  .public-page :is(#beranda, #layanan, #direktori) { scroll-margin-top: 82px; }
+}

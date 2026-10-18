@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { resolveTheme, type ThemeMode } from "@/lib/ui-model";
+import { getStoredPreference, setStoredPreference } from "@/lib/browser-storage";
 
 interface ThemeContextValue {
   theme: ThemeMode;
@@ -15,7 +16,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      const next = resolveTheme(localStorage.getItem("kominfo-theme"), window.matchMedia("(prefers-color-scheme: dark)").matches);
+      const next = resolveTheme(getStoredPreference("kominfo-theme"), window.matchMedia("(prefers-color-scheme: dark)").matches);
       setTheme(next);
       document.documentElement.dataset.theme = next;
     }, 0);
@@ -26,7 +27,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     theme,
     toggleTheme: () => setTheme((current) => {
       const next = current === "light" ? "dark" : "light";
-      localStorage.setItem("kominfo-theme", next);
+      setStoredPreference("kominfo-theme", next);
       document.documentElement.dataset.theme = next;
       return next;
     }),

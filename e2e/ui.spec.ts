@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 
 const actor = {
   accountId: "account-master",
@@ -81,7 +82,7 @@ test("public landing and login follow the Kominfo design language", async ({ pag
   await page.goto("/");
   await expect(page.getByRole("heading", { name: /Data kepegawaian yang tertata/i })).toBeVisible();
   await expect(page.getByAltText("Lambang Kota Parepare")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Aisyah Rahma" })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Direktori pegawai publik" }).getByText("Aisyah Rahma", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: /Masuk ke sistem/i }).click();
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole("heading", { name: "Masuk ke Portal" })).toBeVisible();
@@ -112,6 +113,29 @@ test("archived employees can be restored and exports download as Excel", async (
   await page.getByRole("button", { name: "Unduh", exact: true }).click();
   await expect((await download).suggestedFilename()).toMatch(/data-kepegawaian-\d{4}-\d{2}-\d{2}\.xls/);
   await expect.poll(() => actions.includes("export.snapshot")).toBe(true);
+});
+
+test("PDF exports download directly with stroked table borders", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await mockDashboard(page);
+  await page.goto("/dashboard");
+  await page.getByRole("button", { name: "Data Pegawai" }).click();
+  await page.getByRole("button", { name: "Unduh data" }).click();
+  await page.getByRole("radio", { name: /^PDF / }).check();
+  const downloaded = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Unduh", exact: true }).click();
+  const download = await downloaded;
+  expect(download.suggestedFilename()).toMatch(/^data-kepegawaian-\d{4}-\d{2}-\d{2}\.pdf$/);
+  expect(await download.failure()).toBeNull();
+  const content = (await readFile((await download.path())!)).toString("latin1");
+  expect(content).toMatch(/^%PDF-/);
+  const borders = content.match(/[-\d.]+ [-\d.]+ [-\d.]+ [-\d.]+ re\s+S(?:\s|$)/g) ?? [];
+  expect(borders).toHaveLength(20);
+  expect(content).toContain("Aisyah Rahma");
+  expect(content).toContain("Fajar Akbar");
+  await expect(page.getByRole("heading", { name: "Unduh data pegawai" })).toBeHidden();
+  expect(errors).toEqual([]);
 });
 
 test("account password reset and category editing call the protected backend actions", async ({ page }) => {

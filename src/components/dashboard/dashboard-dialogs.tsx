@@ -1,27 +1,95 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { FormEvent, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 import { Icon } from "@/components/icons";
 import { backend, errorMessage } from "@/lib/client-api";
+import { getStoredPreference, setStoredPreference } from "@/lib/browser-storage";
 import type { ExportFormat } from "@/lib/export-data";
 import { employeeName, type UiAccount, type UiCategory, type UiEmployee, type UiField } from "@/lib/ui-model";
 
-export function Modal({ title, eyebrow, children, onClose, wide = false }: { title: string; eyebrow?: string; children: React.ReactNode; onClose: () => void; wide?: boolean }) {
+const dialogLayers: HTMLElement[] = [];
+const originalInert = new Map<HTMLElement, boolean>();
+let originalOverflow = "";
+let originalFocus: HTMLElement | null = null;
+
+function dialogControls(layer: HTMLElement) {
+  return [...layer.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], summary, [tabindex]')].filter((element) =>
+    element.tabIndex >= 0 && !element.matches(":disabled") && !element.closest("[inert]") && element.getClientRects().length && getComputedStyle(element).visibility !== "hidden",
+  );
+}
+
+function updateDialogLayers() {
+  if (!dialogLayers.length) {
+    for (const [element, inert] of originalInert) element.inert = inert;
+    originalInert.clear();
+    document.body.style.overflow = originalOverflow;
+    return;
+  }
+  const top = dialogLayers.at(-1);
+  for (const element of document.body.children) {
+    if (!(element instanceof HTMLElement)) continue;
+    if (!originalInert.has(element)) originalInert.set(element, element.inert);
+    element.inert = element !== top;
+  }
+}
+
+function useDialogLayer(ref: RefObject<HTMLElement | null>, enabled: boolean, onClose: () => void) {
+  const close = useRef(onClose);
+  useEffect(() => { close.current = onClose; }, [onClose]);
+  useEffect(() => {
+    const layer = ref.current;
+    if (!enabled || !layer) return;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (!dialogLayers.length) { originalOverflow = document.body.style.overflow; originalFocus = opener; }
+    dialogLayers.push(layer);
+    document.body.style.overflow = "hidden";
+    updateDialogLayers();
+    const focusFirst = () => (dialogControls(layer)[0] ?? layer).focus({ preventScroll: true });
+    focusFirst();
+    const keydown = (event: KeyboardEvent) => {
+      if (dialogLayers.at(-1) !== layer) return;
+      if (event.key === "Escape") { event.preventDefault(); event.stopImmediatePropagation(); close.current(); return; }
+      if (event.key !== "Tab") return;
+      const controls = dialogControls(layer), first = controls[0], last = controls.at(-1);
+      if (!first) { event.preventDefault(); layer.focus(); }
+      else if (event.shiftKey && (document.activeElement === first || document.activeElement === layer)) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    const focusin = (event: FocusEvent) => {
+      if (dialogLayers.at(-1) === layer && event.target instanceof Node && !layer.contains(event.target)) focusFirst();
+    };
+    window.addEventListener("keydown", keydown);
+    document.addEventListener("focusin", focusin);
+    return () => {
+      window.removeEventListener("keydown", keydown);
+      document.removeEventListener("focusin", focusin);
+      dialogLayers.splice(dialogLayers.indexOf(layer), 1);
+      updateDialogLayers();
+      const target = dialogLayers.length ? opener : originalFocus;
+      if (target?.isConnected && !target.closest("[inert]")) target.focus({ preventScroll: true });
+      if (!dialogLayers.length) originalFocus = null;
+    };
+  }, [enabled, ref]);
+}
+
+export function Modal({ title, eyebrow, children, onClose, wide = false, dismissible = true }: { title: string; eyebrow?: string; children: React.ReactNode; onClose: () => void; wide?: boolean; dismissible?: boolean }) {
   const mounted = useSyncExternalStore(() => () => undefined, () => true, () => false);
-  useEffect(() => { const original = document.body.style.overflow; document.body.style.overflow = "hidden"; const escape = (event: KeyboardEvent) => event.key === "Escape" && onClose(); window.addEventListener("keydown", escape); return () => { document.body.style.overflow = original; window.removeEventListener("keydown", escape); }; }, [onClose]);
+  const layer = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  useDialogLayer(layer, mounted, () => { if (dismissible) onClose(); });
   if (!mounted) return null;
-  return createPortal(<div className="modal-layer" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-    <section className={`modal ${wide ? "modal--wide" : ""}`} role="dialog" aria-modal="true" aria-labelledby="modal-title">
-      <header className="modal__header"><div>{eyebrow && <span>{eyebrow}</span>}<h2 id="modal-title">{title}</h2></div><button type="button" onClick={onClose} aria-label="Tutup"><Icon name="close"/></button></header>
+  return createPortal(<div ref={layer} className="modal-layer" role="presentation" tabIndex={-1} onMouseDown={(event) => event.target === event.currentTarget && dismissible && onClose()}>
+    <section className={`modal ${wide ? "modal--wide" : ""}`} role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <header className="modal__header"><div>{eyebrow && <span>{eyebrow}</span>}<h2 id={titleId}>{title}</h2></div><button type="button" onClick={onClose} aria-label="Tutup" disabled={!dismissible}><Icon name="close"/></button></header>
       {children}
     </section>
   </div>, document.body);
 }
 
 export function ConfirmDialog({ title, description, confirmLabel = "Lanjutkan", danger = false, pending = false, onCancel, onConfirm }: { title: string; description: string; confirmLabel?: string; danger?: boolean; pending?: boolean; onCancel: () => void; onConfirm: () => void }) {
-  return <Modal title={title} eyebrow="Konfirmasi tindakan" onClose={onCancel}><div className="confirm-dialog"><span className={danger ? "confirm-dialog__icon is-danger" : "confirm-dialog__icon"}><Icon name={danger ? "alert" : "check"}/></span><p>{description}</p><div className="modal__actions"><button className="button button--secondary" onClick={onCancel} disabled={pending}>Batal</button><button className={`button ${danger ? "button--danger" : "button--primary"}`} onClick={onConfirm} disabled={pending}>{pending ? "Memproses…" : confirmLabel}</button></div></div></Modal>;
+  return <Modal title={title} eyebrow="Konfirmasi tindakan" onClose={onCancel} dismissible={!pending}><div className="confirm-dialog"><span className={danger ? "confirm-dialog__icon is-danger" : "confirm-dialog__icon"}><Icon name={danger ? "alert" : "check"}/></span><p>{description}</p><div className="modal__actions"><button className="button button--secondary" onClick={onCancel} disabled={pending}>Batal</button><button className={`button ${danger ? "button--danger" : "button--primary"}`} onClick={onConfirm} disabled={pending}>{pending ? "Memproses…" : confirmLabel}</button></div></div></Modal>;
 }
 
 const FIELD_GROUPS = [
@@ -34,10 +102,11 @@ const FIELD_GROUPS = [
 type DetailTextSize = "small" | "medium" | "large";
 const DETAIL_TEXT_SIZE_KEY = "kominfo-detail-text-size";
 const DETAIL_TEXT_SIZE_EVENT = "kominfo-detail-text-size-change";
+let transientDetailTextSize: DetailTextSize = "medium";
 
 function detailTextSizeSnapshot(): DetailTextSize {
-  const saved = window.localStorage.getItem(DETAIL_TEXT_SIZE_KEY);
-  return saved === "small" || saved === "large" ? saved : "medium";
+  const saved = getStoredPreference(DETAIL_TEXT_SIZE_KEY);
+  return saved === "small" || saved === "large" || saved === "medium" ? saved : transientDetailTextSize;
 }
 
 function subscribeDetailTextSize(onStoreChange: () => void) {
@@ -117,7 +186,8 @@ export function EmployeeDetail({ employee, category, fields, canEdit, onClose, o
   const groups = groupedFields(relevant);
   const textSize = useSyncExternalStore(subscribeDetailTextSize, detailTextSizeSnapshot, () => "medium");
   function updateTextSize(next: DetailTextSize) {
-    window.localStorage.setItem(DETAIL_TEXT_SIZE_KEY, next);
+    transientDetailTextSize = next;
+    setStoredPreference(DETAIL_TEXT_SIZE_KEY, next);
     window.dispatchEvent(new Event(DETAIL_TEXT_SIZE_EVENT));
   }
   const name = employeeName(employee);
@@ -145,9 +215,11 @@ export function EmployeeDetail({ employee, category, fields, canEdit, onClose, o
 function RemotePhoto({ fileId, employeeName: name }: { fileId?: string; employeeName: string }) {
   const [src, setSrc] = useState("");
   const [expanded, setExpanded] = useState(false);
+  const lightbox = useRef<HTMLButtonElement>(null);
+  useDialogLayer(lightbox, expanded, () => setExpanded(false));
   useEffect(() => { if (!fileId) return; let live = true; backend<{ mimeType: string; base64: string }>("files.get", { id: fileId }).then((file) => live && setSrc(`data:${file.mimeType};base64,${file.base64}`)).catch(() => undefined); return () => { live = false; }; }, [fileId]);
   return <>{src ? <button type="button" className="employee-photo" aria-label={`Perbesar foto ${name}`} onClick={() => setExpanded(true)}><Image src={src} width={132} height={156} unoptimized alt={`Foto ${name}`}/></button> : <div className="employee-photo employee-photo--empty"><Icon name="user" size={42}/></div>}
-    {expanded && createPortal(<button type="button" className="photo-lightbox" role="dialog" aria-modal="true" aria-label={`Foto ${name}`} onClick={() => setExpanded(false)}><Image src={src} width={1200} height={1500} unoptimized alt={`Foto ${name} ukuran penuh`}/></button>, document.body)}
+    {expanded && createPortal(<button ref={lightbox} type="button" className="photo-lightbox" role="dialog" aria-modal="true" aria-label={`Foto ${name}`} onClick={() => setExpanded(false)}><Image src={src} width={1200} height={1500} unoptimized alt={`Foto ${name} ukuran penuh`}/></button>, document.body)}
   </>;
 }
 
@@ -193,7 +265,7 @@ export function ResetPasswordForm({ account, onClose, onSave }: { account: UiAcc
 
 export function ExportDialog({ onClose, onDownload, pending }: { onClose: () => void; onDownload: (format: ExportFormat) => void; pending: boolean }) {
   const [format, setFormat] = useState<ExportFormat>("excel");
-  return <Modal title="Unduh data pegawai" eyebrow="Ekspor data" onClose={onClose}><div className="export-dialog"><p>Pilih format file. Data akan disimpan langsung ke perangkat Anda.</p><div className="export-options">
+  return <Modal title="Unduh data pegawai" eyebrow="Ekspor data" onClose={onClose} dismissible={!pending}><div className="export-dialog"><p>Pilih format file. Data akan disimpan langsung ke perangkat Anda.</p><div className="export-options">
     {([['excel', 'Excel', 'Spreadsheet .xls yang dapat dibuka di Microsoft Excel.'], ['pdf', 'PDF', 'Dokumen ringkas siap dibaca dan dibagikan.'], ['both', 'Excel + PDF', 'Unduh kedua format sekaligus.']] as const).map(([value, label, description]) => <label key={value} className={format === value ? "is-active" : ""}><input type="radio" name="export-format" value={value} checked={format === value} onChange={() => setFormat(value)}/><span><strong>{label}</strong><small>{description}</small></span></label>)}
   </div><div className="modal__actions"><button className="button button--secondary" onClick={onClose} disabled={pending}>Batal</button><button className="button button--primary" onClick={() => onDownload(format)} disabled={pending}><Icon name="download" size={17}/>{pending ? "Menyiapkan…" : "Unduh"}</button></div></div></Modal>;
 }
