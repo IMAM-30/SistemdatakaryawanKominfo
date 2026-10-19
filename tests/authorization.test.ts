@@ -20,11 +20,14 @@ describe("action authorization", () => {
     expect(authorizeAction("KOMINFO_ADMIN", "employees.create")).toBe(true);
     expect(authorizeAction("KOMINFO_ADMIN", "fields.create")).toBe(true);
     expect(authorizeAction("KOMINFO_ADMIN", "accounts.createPortal")).toBe(true);
+    expect(authorizeAction("KOMINFO_ADMIN", "accounts.updateOwnProfilePhoto")).toBe(true);
+    expect(authorizeAction("MASTER_ADMIN", "accounts.updateOwnProfilePhoto")).toBe(true);
   });
 
   it("keeps portal accounts read-only", () => {
     expect(authorizeAction("PORTAL", "employees.list")).toBe(true);
     expect(authorizeAction("PORTAL", "employees.update")).toBe(false);
+    expect(authorizeAction("PORTAL", "accounts.updateOwnProfilePhoto")).toBe(false);
   });
 
   it("only exposes the explicitly public file action without a role", () => {

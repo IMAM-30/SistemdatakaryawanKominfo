@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import type { SessionActor } from "@/lib/domain/types";
 import { backend, ClientApiError, errorMessage, getSession, logout } from "@/lib/client-api";
 import { loginPathForRole } from "@/lib/login-access";
@@ -12,8 +11,8 @@ import { AppBrand } from "@/components/app-brand";
 import { Icon, type IconName } from "@/components/icons";
 import { LiveClock } from "@/components/live-clock";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { AccountAvatar } from "@/components/employee-avatar";
 import { AccountsPanel, AuditPanel, EmployeePanel, FieldsPanel, OverviewPanel, SettingsPanel } from "@/components/dashboard/dashboard-panels";
-import adminImage from "../../../image/admin.png";
 
 export interface DashboardData {
   categories: UiCategory[];
@@ -125,6 +124,7 @@ export function DashboardApp() {
   const navigation = useMemo(() => actor ? navigationForRole(actor.role) : [], [actor]);
   const goTo = (next: NavigationItem["id"]) => { setView(next); setSidebarOpen(false); setAccountMenu(false); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const refresh = () => actor && loadData(actor, true);
+  const refreshActor = useCallback(async () => { const current = await getSession(); setActor(current); }, []);
   const retry = () => {
     if (actor) void loadData(actor);
     else { setFatalError(""); setLoading(true); setSessionAttempt((attempt) => attempt + 1); }
@@ -143,7 +143,7 @@ export function DashboardApp() {
 
   if (!actor || !data) return <DashboardLoading error={fatalError} loading={loading} hasSession={Boolean(actor)} onRetry={retry}/>;
 
-  const panelProps = { actor, data, refresh, refreshing, notify };
+  const panelProps = { actor, data, refresh, refreshActor, refreshing, notify };
   return <div className="dashboard-shell">
     <button className={`dashboard-backdrop ${sidebarOpen ? "is-open" : ""}`} type="button" tabIndex={-1} aria-label="Tutup navigasi" onClick={() => setSidebarOpen(false)}/>
     <aside ref={sidebar} id="dashboard-navigation" className={`dashboard-sidebar ${sidebarOpen ? "is-open" : ""}`} role={sidebarOpen ? "dialog" : undefined} aria-modal={sidebarOpen ? true : undefined} aria-label="Navigasi ruang kerja">
@@ -153,13 +153,13 @@ export function DashboardApp() {
         {navigation.map((item) => <button key={item.id} type="button" aria-current={view === item.id ? "page" : undefined} className={view === item.id ? "is-active" : ""} onClick={() => goTo(item.id)}><Icon name={NAV_ICONS[item.id]}/><span>{item.label}</span>{view === item.id && <i/>}</button>)}
       </nav>
       <div className="dashboard-sidebar__support"><Icon name="database"/><div><strong>Data kepegawaian</strong><small>Terpusat, tertata, dan terkelola</small></div></div>
-      <div className="sidebar-user"><span className="avatar avatar--initial">{actor.displayName.slice(0, 1).toUpperCase()}</span><div><strong>{actor.displayName}</strong><small>{roleLabel(actor.role)}</small></div><button type="button" onClick={signOut} title="Keluar" aria-label="Keluar"><Icon name="logout" size={18}/></button></div>
+      <div className="sidebar-user"><AccountAvatar fileId={actor.profilePhotoFileId} name={actor.displayName}/><div><strong>{actor.displayName}</strong><small>{roleLabel(actor.role)}</small></div><button type="button" onClick={signOut} title="Keluar" aria-label="Keluar"><Icon name="logout" size={18}/></button></div>
     </aside>
     <div className="dashboard-main" inert={sidebarOpen}>
       <header className="dashboard-topbar">
         <button ref={menuButton} className="mobile-menu" type="button" onClick={() => setSidebarOpen(true)} aria-label="Buka navigasi" aria-controls="dashboard-navigation" aria-expanded={sidebarOpen}><Icon name="menu"/></button>
         <form className="global-search" onSubmit={runGlobalSearch}><Icon name="search" size={18}/><input ref={searchInput} aria-label="Cari pegawai" placeholder="Cari nama atau NIP pegawai" value={globalSearch} onChange={(event) => setGlobalSearch(event.target.value)}/><kbd>⌘ K</kbd></form>
-        <div className="dashboard-topbar__actions"><LiveClock compact/><ThemeToggle/><div className="account-popover-wrap"><button className="topbar-account" type="button" onClick={() => setAccountMenu((value) => !value)} aria-expanded={accountMenu}><span className="avatar"><Image src={adminImage} alt="" sizes="38px"/></span><span><strong>{actor.displayName}</strong><small>{roleLabel(actor.role)}</small></span><Icon name="chevron" size={15}/></button>{accountMenu && <div className="account-popover"><button onClick={() => goTo("settings")}><Icon name="settings" size={17}/> Pengaturan akun</button><button onClick={signOut}><Icon name="logout" size={17}/> Keluar dari sistem</button></div>}</div></div>
+        <div className="dashboard-topbar__actions"><LiveClock compact/><ThemeToggle/><div className="account-popover-wrap"><button className="topbar-account" type="button" onClick={() => setAccountMenu((value) => !value)} aria-expanded={accountMenu}><AccountAvatar fileId={actor.profilePhotoFileId} name={actor.displayName}/><span><strong>{actor.displayName}</strong><small>{roleLabel(actor.role)}</small></span><Icon name="chevron" size={15}/></button>{accountMenu && <div className="account-popover"><button onClick={() => goTo("settings")}><Icon name="settings" size={17}/> Pengaturan akun</button><button onClick={signOut}><Icon name="logout" size={17}/> Keluar dari sistem</button></div>}</div></div>
       </header>
       <main className="dashboard-content">
         <div className="dashboard-titlebar"><div><span className="eyebrow">Data Kepegawaian</span><h1>{VIEW_COPY[view].title}</h1><p>{VIEW_COPY[view].description}</p></div><button type="button" className="refresh-button" onClick={refresh} disabled={refreshing}><Icon name="restore" size={17}/><span>{refreshing ? "Menyinkronkan…" : "Sinkronkan data"}</span></button></div>

@@ -11,13 +11,15 @@ import { Icon } from "@/components/icons";
 import { downloadSnapshot, type ExportFormat, type ExportSnapshot } from "@/lib/export-data";
 import { loginPathForRole } from "@/lib/login-access";
 import { AccountEditForm, AccountForm, ConfirmDialog, EmployeeDetail, EmployeeForm, ExportDialog, Modal, PasswordForm, ResetPasswordForm, formatValue } from "@/components/dashboard/dashboard-dialogs";
-import { EmployeeAvatar } from "@/components/employee-avatar";
+import { AccountAvatar, EmployeeAvatar } from "@/components/employee-avatar";
 import { ListMoreControl, useProgressiveList } from "@/components/progressive-list";
+import { auditActorLabel, auditChangeRows, auditEntityLabel, legacyAuditSummary } from "@/lib/audit-log";
 
 interface PanelProps {
   actor: SessionActor;
   data: DashboardData;
   refresh: () => void;
+  refreshActor: () => Promise<void>;
   refreshing: boolean;
   notify: (message: string, tone?: "success" | "danger") => void;
 }
@@ -47,7 +49,7 @@ export function OverviewPanel({ actor, data, onNavigate }: PanelProps & { onNavi
         <div className="attention-list"><div><span className="attention-icon is-blue"><Icon name="database"/></span><div><strong>{stats.inactive} data tidak aktif</strong><small>Periksa data arsip atau status pegawai.</small></div><button onClick={() => onNavigate("employees")}><Icon name="chevron"/></button></div>{actor.role !== "PORTAL" && <><div><span className="attention-icon is-green"><Icon name="accounts"/></span><div><strong>{data.admins.length + data.portals.length} akun terkelola</strong><small>Admin Kominfo dan pengguna Portal.</small></div><button onClick={() => onNavigate("accounts")}><Icon name="chevron"/></button></div><div><span className="attention-icon is-amber"><Icon name="audit"/></span><div><strong>{data.audit.length} aktivitas terbaru</strong><small>Jejak perubahan terakhir sistem.</small></div><button onClick={() => onNavigate("audit")}><Icon name="chevron"/></button></div></>}</div>
       </article>
     </section>
-    <section className="panel recent-panel"><div className="panel__header"><div><h3>Aktivitas terbaru</h3><p>Perubahan terakhir yang tercatat oleh sistem</p></div>{actor.role !== "PORTAL" && <button onClick={() => onNavigate("audit")}>Semua aktivitas <Icon name="chevron" size={15}/></button>}</div>{recent.total ? <div id="recent-records" className="activity-list">{recent.items.map((item) => <div key={item.id}><span><Icon name="activity" size={17}/></span><div><strong>{actionLabel(item.action)}</strong><small>{item.entityType} · {item.actorRole}</small></div><time>{formatDateTime(item.createdAt)}</time></div>)}</div> : <EmptyState icon="activity" title="Belum ada aktivitas" description="Aktivitas perubahan data akan tampil di bagian ini."/>}<ListMoreControl list={recent} label="aktivitas" controls="recent-records"/></section>
+    <section className="panel recent-panel"><div className="panel__header"><div><h3>Aktivitas terbaru</h3><p>Perubahan terakhir yang tercatat oleh sistem</p></div>{actor.role !== "PORTAL" && <button onClick={() => onNavigate("audit")}>Semua aktivitas <Icon name="chevron" size={15}/></button>}</div>{recent.total ? <div id="recent-records" className="activity-list">{recent.items.map((item) => <div key={item.id}><span><Icon name="activity" size={17}/></span><div><strong>{actionLabel(item.action)} · {auditEntityLabel(item)}</strong><small>Dilakukan oleh {auditActorLabel(item)}</small></div><time>{formatDateTime(item.createdAt)}</time></div>)}</div> : <EmptyState icon="activity" title="Belum ada aktivitas" description="Aktivitas perubahan data akan tampil di bagian ini."/>}<ListMoreControl list={recent} label="aktivitas" controls="recent-records"/></section>
   </>;
 }
 
@@ -182,25 +184,48 @@ export function FieldsPanel({ data, refresh, notify }: PanelProps) {
 
 export function AuditPanel({ data }: PanelProps) {
   const [query, setQuery] = useState("");
-  const rows = data.audit.filter((item) => `${item.action} ${item.entityType} ${item.actorRole}`.toLowerCase().includes(query.toLowerCase()));
+  const rows = data.audit.filter((item) => `${item.action} ${item.entityType} ${item.actorRole} ${auditActorLabel(item)} ${auditEntityLabel(item)} ${auditChangeRows(item).map((change) => `${change.label} ${change.before} ${change.after}`).join(" ")}`.toLocaleLowerCase("id-ID").includes(query.toLocaleLowerCase("id-ID")));
   const auditList = useProgressiveList(rows, query);
-  return <section className="panel audit-panel"><div className="audit-toolbar"><div className="input-shell"><Icon name="search" size={18}/><input className="input" placeholder="Cari aktivitas" value={query} onChange={(event) => setQuery(event.target.value)}/></div><span><Icon name="audit" size={17}/> {rows.length} catatan terakhir</span></div>{rows.length ? <div id="audit-records" className="audit-timeline">{auditList.items.map((item) => <article key={item.id}><span className="audit-timeline__dot"><Icon name="activity" size={16}/></span><div><div><strong>{actionLabel(item.action)}</strong><span className="status-pill status-pill--inactive">{item.entityType}</span></div><p>{summaryLabel(item.summary)}</p><small>{item.actorRole} · ID {item.actorId.slice(0, 8)}</small></div><time>{formatDateTime(item.createdAt)}</time></article>)}</div> : <EmptyState icon="audit" title="Aktivitas tidak ditemukan" description="Catatan audit akan muncul setelah ada perubahan pada sistem."/>}<ListMoreControl list={auditList} label="aktivitas" controls="audit-records"/></section>;
+  return <section className="panel audit-panel"><div className="audit-toolbar"><div className="input-shell"><Icon name="search" size={18}/><input className="input" placeholder="Cari aktivitas, data, atau username admin" value={query} onChange={(event) => setQuery(event.target.value)}/></div><span><Icon name="audit" size={17}/> {rows.length} catatan terakhir</span></div>{rows.length ? <div id="audit-records" className="audit-timeline">{auditList.items.map((item) => { const changes = auditChangeRows(item); return <article key={item.id}><span className="audit-timeline__dot"><Icon name="activity" size={16}/></span><div className="audit-entry"><div className="audit-entry__heading"><strong>{actionLabel(item.action)}</strong><span className="status-pill status-pill--inactive">{auditEntityLabel(item)}</span></div><p className="audit-entry__actor"><Icon name="user" size={14}/> Dilakukan oleh <b>{auditActorLabel(item)}</b></p>{changes.length ? <div className="audit-changes">{changes.map((change, index) => <div key={`${change.label}-${index}`}><strong>{change.label}</strong><span className="audit-value audit-value--before">{change.before}</span><i aria-hidden="true">→</i><span className="audit-value audit-value--after">{change.after}</span></div>)}</div> : <p>{legacyAuditSummary(item)}</p>}<small>{item.entityType} · ID {item.entityId.slice(0, 8)}</small></div><time>{formatDateTime(item.createdAt)}</time></article>; })}</div> : <EmptyState icon="audit" title="Aktivitas tidak ditemukan" description="Catatan audit akan muncul setelah ada perubahan pada sistem."/>}<ListMoreControl list={auditList} label="aktivitas" controls="audit-records"/></section>;
 }
 
-export function SettingsPanel({ actor, data, refresh, notify }: PanelProps) {
+export function SettingsPanel({ actor, data, refresh, refreshActor, notify }: PanelProps) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [profilePhoto, setProfilePhoto] = useState<File>();
+  const [photoPending, setPhotoPending] = useState(false);
   const [pendingMode, setPendingMode] = useState<string | null>(null);
   const mode = data.settings.PORTAL_MODE ?? "LOGIN_REQUIRED";
   async function changeMode() { if (!pendingMode) return; setPending(true); try { await backend("settings.update", { key: "PORTAL_MODE", value: pendingMode }, true); notify("Mode akses portal berhasil diperbarui."); setPendingMode(null); refresh(); } catch (cause) { notify(errorMessage(cause), "danger"); } finally { setPending(false); } }
   async function changePassword(value: { currentPassword: string; password: string }) { await backend("accounts.changeOwnPassword", value, true); notify("Password berhasil diganti. Silakan masuk kembali."); window.setTimeout(() => router.replace(loginPathForRole(actor.role)), 900); }
+  async function changeProfilePhoto() {
+    if (!profilePhoto || photoPending) return;
+    setPhotoPending(true);
+    let uploadedId = "";
+    let attached = false;
+    try {
+      const base64 = await fileToBase64(profilePhoto);
+      const uploaded = await backend<{ id: string }>("files.upload", { name: profilePhoto.name, mimeType: profilePhoto.type, base64 }, true);
+      uploadedId = uploaded.id;
+      await backend("accounts.updateOwnProfilePhoto", { profilePhotoFileId: uploaded.id }, true);
+      attached = true;
+      if (actor.profilePhotoFileId) await backend("files.delete", { id: actor.profilePhotoFileId }, true).catch(() => undefined);
+      setProfilePhoto(undefined);
+      await refreshActor();
+      refresh();
+      notify("Foto profil berhasil diperbarui.");
+    } catch (cause) {
+      if (uploadedId && !attached) await backend("files.delete", { id: uploadedId }, true).catch(() => undefined);
+      notify(errorMessage(cause), "danger");
+    } finally { setPhotoPending(false); }
+  }
   return <div className="settings-grid"><section className="panel settings-card"><div className="settings-card__heading"><span><Icon name="lock"/></span><div><h3>Akses portal data</h3><p>Tentukan siapa yang dapat melihat informasi kepegawaian.</p></div></div><div className="portal-modes">{[
     ["PUBLIC", "Publik", "Data yang ditandai publik dapat dilihat tanpa login."],
     ["LOGIN_REQUIRED", "Wajib login", "Hanya pengguna dengan akun Portal yang dapat mengakses."],
     ["CLOSED", "Ditutup", "Portal tidak dapat diakses sementara oleh pengguna Portal."],
   ].map(([value, label, description]) => <label key={value} className={mode === value ? "is-active" : ""}><input type="radio" name="portal-mode" checked={mode === value} disabled={pending} onChange={() => setPendingMode(value)}/><span><i>{mode === value && <Icon name="check" size={13}/>}</i><strong>{label}</strong><small>{description}</small></span></label>)}</div></section>
-    <section className="panel profile-card"><div className="settings-card__heading"><span><Icon name="user"/></span><div><h3>Profil akun</h3><p>Identitas akun yang sedang digunakan.</p></div></div><dl><div><dt>Nama</dt><dd>{actor.displayName}</dd></div><div><dt>ID pengguna</dt><dd>@{actor.username}</dd></div><div><dt>Hak akses</dt><dd>{roleLabel(actor.role)}</dd></div><div><dt>Status sesi</dt><dd><span className="status-pill status-pill--active">Aktif</span></dd></div></dl><button className="button button--secondary" onClick={() => setShowPassword(true)}><Icon name="lock" size={17}/> Ganti password</button></section>
+    <section className="panel profile-card"><div className="settings-card__heading"><span><Icon name="user"/></span><div><h3>Profil akun</h3><p>Identitas akun yang sedang digunakan.</p></div></div><div className="profile-photo-editor"><AccountAvatar fileId={actor.profilePhotoFileId} name={actor.displayName}/><div><strong>Foto profil</strong><small>{profilePhoto ? profilePhoto.name : "JPEG, PNG, atau WebP. Maksimal 2 MB."}</small><div><label className="button button--secondary button--small" htmlFor="profile-photo">Pilih foto</label><input id="profile-photo" className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" disabled={photoPending} onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; if (file.size > 2 * 1024 * 1024) { notify("Ukuran foto maksimal 2 MB.", "danger"); event.target.value = ""; return; } setProfilePhoto(file); }}/>{profilePhoto && <button className="button button--primary button--small" type="button" disabled={photoPending} onClick={changeProfilePhoto}>{photoPending ? "Menyimpan…" : "Simpan foto"}</button>}</div></div></div><dl><div><dt>Nama</dt><dd>{actor.displayName}</dd></div><div><dt>ID pengguna</dt><dd>@{actor.username}</dd></div><div><dt>Hak akses</dt><dd>{roleLabel(actor.role)}</dd></div><div><dt>Status sesi</dt><dd><span className="status-pill status-pill--active">Aktif</span></dd></div></dl><button className="button button--secondary" onClick={() => setShowPassword(true)}><Icon name="lock" size={17}/> Ganti password</button></section>
     <section className="panel settings-note"><span><Icon name="database"/></span><div><h3>Penyimpanan Google</h3><p>Data operasional tersimpan pada Google Sheets dan foto tersimpan privat di Google Drive. Semua perubahan penting dicatat dalam audit log.</p></div></section>
     {showPassword && <PasswordForm onClose={() => setShowPassword(false)} onSave={changePassword}/>} 
     {pendingMode && <ConfirmDialog danger={pendingMode === "PUBLIC" || pendingMode === "CLOSED"} title="Ubah akses portal?" description={pendingMode === "PUBLIC" ? "Data yang ditandai publik akan dapat dilihat tanpa login." : pendingMode === "CLOSED" ? "Seluruh pengguna Portal akan kehilangan akses sementara." : "Portal hanya dapat diakses oleh pengguna yang sudah login."} confirmLabel="Ya, ubah mode" onCancel={() => setPendingMode(null)} onConfirm={changeMode} pending={pending}/>} 
@@ -224,5 +249,4 @@ function FieldForm({ categoryId, field, onClose, onSaved }: { categoryId: string
 function EmptyState({ icon, title, description, action }: { icon: "search" | "accounts" | "fields" | "audit" | "activity"; title: string; description: string; action?: React.ReactNode }) { return <div className="empty-state"><span><Icon name={icon} size={28}/></span><h3>{title}</h3><p>{description}</p>{action}</div>; }
 function fileToBase64(file: File): Promise<string> { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1] ?? ""); reader.onerror = reject; reader.readAsDataURL(file); }); }
 function formatDateTime(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Makassar" }).format(date); }
-function actionLabel(action: string) { const labels: Record<string, string> = { "accounts.bootstrapMaster": "Admin Master dibuat", "employees.create": "Data pegawai ditambahkan", "employees.update": "Data pegawai diperbarui", "employees.delete": "Data pegawai diarsipkan", "employees.restore": "Data pegawai dipulihkan", "accounts.createAdmin": "Admin Kominfo dibuat", "accounts.createPortal": "Akun Portal dibuat", "settings.update": "Pengaturan diperbarui", "fields.create": "Kolom data ditambahkan", "categories.create": "Kategori ditambahkan" }; return labels[action] ?? action.replaceAll(".", " · "); }
-function summaryLabel(summary?: Record<string, unknown>) { if (!summary || !Object.keys(summary).length) return "Tindakan berhasil diproses oleh sistem."; return Object.entries(summary).map(([key, value]) => `${key}: ${String(value)}`).join(" · "); }
+function actionLabel(action: string) { const labels: Record<string, string> = { "accounts.bootstrapMaster": "Admin Master dibuat", "employees.create": "Data pegawai ditambahkan", "employees.update": "Data pegawai diperbarui", "employees.delete": "Data pegawai diarsipkan", "employees.restore": "Data pegawai dipulihkan", "accounts.create": "Akun dibuat", "accounts.createAdmin": "Admin Kominfo dibuat", "accounts.createPortal": "Akun Portal dibuat", "accounts.update": "Akun diperbarui", "accounts.updateAdmin": "Admin diperbarui", "accounts.updatePortal": "Akun Portal diperbarui", "accounts.delete": "Akun diarsipkan", "accounts.restore": "Akun dipulihkan", "accounts.changePassword": "Password akun diubah", "accounts.updateOwnProfilePhoto": "Foto profil diperbarui", "accounts.revealCredential": "Kredensial akun dilihat", "settings.update": "Pengaturan diperbarui", "fields.create": "Kolom data ditambahkan", "fields.update": "Kolom data diperbarui", "fields.delete": "Kolom data diarsipkan", "fields.restore": "Kolom data dipulihkan", "categories.create": "Kategori ditambahkan", "categories.update": "Kategori diperbarui", "categories.delete": "Kategori diarsipkan", "categories.restore": "Kategori dipulihkan", "files.upload": "Foto diunggah", "files.delete": "Foto dihapus" }; return labels[action] ?? action.replaceAll(".", " · "); }

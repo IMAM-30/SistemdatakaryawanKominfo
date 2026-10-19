@@ -356,6 +356,8 @@
   .activity-list time { max-width: none; text-align: left; }
   .audit-timeline { padding-inline: 15px; }
   .audit-timeline article { padding-left: 42px; }
+  .audit-changes > div { grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr); }
+  .audit-changes > div > strong { grid-column: 1 / -1; }
   .settings-card,
   .profile-card { padding: 20px; }
   .list-more .button { width: 100%; }

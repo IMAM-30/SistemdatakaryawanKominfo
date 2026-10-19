@@ -8,6 +8,7 @@ import { backend, errorMessage } from "@/lib/client-api";
 import { getStoredPreference, setStoredPreference } from "@/lib/browser-storage";
 import { downloadEmployee, type ExportFormat } from "@/lib/export-data";
 import { employeeName, type UiAccount, type UiCategory, type UiEmployee, type UiField } from "@/lib/ui-model";
+import { dateForDisplay, dateForStorage, maskDateInput } from "@/lib/date-format";
 
 const dialogLayers: HTMLElement[] = [];
 const originalInert = new Map<HTMLElement, boolean>();
@@ -171,8 +172,19 @@ function DynamicField({ field, value, onChange }: { field: UiField; value: unkno
   const options = field.options?.length ? field.options : field.key === "gender" ? ["Laki-laki", "Perempuan"] : field.key === "religion" ? ["Islam", "Kristen", "Katolik", "Hindu", "Buddha", "Konghucu"] : [];
   if (field.type === "boolean") return <label className="toggle-row toggle-row--field"><span><strong>{field.label}</strong><small>{field.required ? "Wajib diisi" : "Opsional"}</small></span><input type="checkbox" checked={Boolean(value)} onChange={(event) => onChange(event.target.checked)}/><i/></label>;
   return <div className={`field ${field.type === "textarea" ? "field--wide" : ""}`}><label htmlFor={`field-${field.id}`}>{field.label}{field.required && <b> *</b>}</label>
-    {field.type === "select" || options.length ? <select id={`field-${field.id}`} className="select" value={String(value ?? "")} onChange={(event) => onChange(event.target.value)} required={field.required}><option value="">Pilih {field.label.toLocaleLowerCase("id-ID")}</option>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select> : field.type === "textarea" ? <textarea id={`field-${field.id}`} className="textarea" value={String(value ?? "")} onChange={(event) => onChange(event.target.value)} required={field.required}/> : <input id={`field-${field.id}`} className="input" type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"} value={String(value ?? "")} onChange={(event) => onChange(field.type === "number" ? Number(event.target.value) : event.target.value)} required={field.required}/>} 
+    {field.type === "select" || options.length ? <select id={`field-${field.id}`} className="select" value={String(value ?? "")} onChange={(event) => onChange(event.target.value)} required={field.required}><option value="">Pilih {field.label.toLocaleLowerCase("id-ID")}</option>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select> : field.type === "textarea" ? <textarea id={`field-${field.id}`} className="textarea" value={String(value ?? "")} onChange={(event) => onChange(event.target.value)} required={field.required}/> : field.type === "date" ? <DateField id={`field-${field.id}`} value={String(value ?? "")} required={field.required} onChange={onChange}/> : <input id={`field-${field.id}`} className="input" type={field.type === "number" ? "number" : "text"} value={String(value ?? "")} onChange={(event) => onChange(field.type === "number" ? Number(event.target.value) : event.target.value)} required={field.required}/>}
   </div>;
+}
+
+function DateField({ id, value, required, onChange }: { id: string; value: string; required: boolean; onChange: (value: unknown) => void }) {
+  const [display, setDisplay] = useState(() => dateForDisplay(value));
+  return <><input id={id} className="input" type="text" inputMode="numeric" autoComplete="off" placeholder="DD/MM/YYYY" maxLength={10} pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}" value={display} required={required} aria-describedby={`${id}-hint`} onChange={(event) => {
+    const next = maskDateInput(event.target.value);
+    const stored = dateForStorage(next);
+    event.target.setCustomValidity(next && !stored ? "Masukkan tanggal yang valid dengan format DD/MM/YYYY." : "");
+    setDisplay(next);
+    if (stored || !next) onChange(stored ?? "");
+  }}/><small id={`${id}-hint`}>Format: DD/MM/YYYY, contoh 19/10/2026.</small></>;
 }
 
 function PhotoInput({ file, existing, removeExisting, onChange, onRemoveExisting }: { file?: File; existing: boolean; removeExisting: boolean; onChange: (file?: File) => void; onRemoveExisting: () => void }) {
@@ -367,7 +379,7 @@ export function formatValue(value: unknown): string {
   if (value === undefined || value === null || value === "") return "—";
   if (typeof value === "boolean") return value ? "Ya" : "Tidak";
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
-    const date = new Date(`${value.slice(0, 10)}T00:00:00`); if (!Number.isNaN(date.getTime())) return new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "long", year: "numeric" }).format(date);
+    return dateForDisplay(value);
   }
   return String(value);
 }

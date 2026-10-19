@@ -7,7 +7,7 @@ import type { Role } from "@/lib/domain/types";
 import { isRoleAllowedForLoginArea, LOGIN_AREAS } from "@/lib/login-access";
 
 const inputSchema = z.object({ username: z.string().trim().min(3).max(64), password: z.string().min(1).max(128), area: z.enum(LOGIN_AREAS) });
-type LoginRecord = { id: string; username: string; displayName: string; role: Role; passwordHash: string; active: boolean };
+type LoginRecord = { id: string; username: string; displayName: string; role: Role; passwordHash: string; active: boolean; profilePhotoFileId?: string };
 
 export async function POST(request: Request) {
   try {

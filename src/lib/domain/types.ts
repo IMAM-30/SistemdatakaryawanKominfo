@@ -9,4 +9,5 @@ export interface SessionActor {
   username: string;
   displayName: string;
   role: Role;
+  profilePhotoFileId?: string;
 }

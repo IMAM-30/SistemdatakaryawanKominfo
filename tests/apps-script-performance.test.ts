@@ -44,7 +44,7 @@ function harness(employeeCount = 1) {
   const context = createContext({
     SpreadsheetApp: { openById },
     PropertiesService: { getScriptProperties: () => ({ getProperty: () => "fixture-spreadsheet" }) },
-    Utilities: { formatDate: () => new Date().toISOString() },
+    Utilities: { formatDate: () => new Date().toISOString(), getUuid: vi.fn(() => "audit-uuid") },
     LockService: { getScriptLock: () => ({ waitLock, releaseLock }) },
     console: { error: vi.fn() },
     verifySignedEnvelope_: (envelope: unknown) => envelope,
@@ -68,6 +68,23 @@ function harness(employeeCount = 1) {
 }
 
 describe("Apps Script request performance and cache correctness", () => {
+  it("records the admin username, affected employee, and exact before/after values", () => {
+    const { request, tables } = harness();
+    const response = request("employees.update", {
+      actor: { accountId: "admin-1", username: "imam.admin", displayName: "Imam Hudzaifah", role: "KOMINFO_ADMIN" },
+      id: "employee-0",
+      expectedVersion: 1,
+      data: { name: "Pegawai Baru", nip: "private-0" },
+    });
+    expect(response.ok).toBe(true);
+    const audit = tables.AUDIT_LOGS.at(-1);
+    expect(audit).toMatchObject({ actorId: "admin-1", actorUsername: "imam.admin", actorDisplayName: "Imam Hudzaifah", entityId: "employee-0" });
+    expect(JSON.parse(String(audit?.summaryJson))).toMatchObject({
+      entityName: "Pegawai Baru",
+      changes: [expect.objectContaining({ field: "name", label: "name", before: "Pegawai 0", after: "Pegawai Baru" })],
+    });
+  });
+
   it("reads each required sheet once for a large public employee list and keeps private fields hidden", () => {
     const { request, reads, openById, activeRows } = harness(300);
     const response = request("employees.publicList");

@@ -11,7 +11,7 @@ function authLookup_(payload) {
   var username = requireText_(payload.username, 'ID pengguna', 3, 64).toLowerCase(); rateLimit_('login:' + username, 15, 900);
   var row = findOne_('ACCOUNTS', function(item) { return String(item.username).toLowerCase() === username && !item.deletedAt; });
   if (!row) throw appError_('INVALID_CREDENTIALS', 'ID atau password tidak sesuai.');
-  return { id: row.id, username: row.username, displayName: row.displayName, role: row.role, passwordHash: row.passwordHash, active: bool_(row.active) };
+  return { id: row.id, username: row.username, displayName: row.displayName, role: row.role, profilePhotoFileId: row.profilePhotoFileId || '', passwordHash: row.passwordHash, active: bool_(row.active) };
 }
 function bootstrapMaster_(payload) {
   var expected = props_().getProperty(APP.PROPERTY_KEYS.BOOTSTRAP_SECRET);
@@ -19,7 +19,7 @@ function bootstrapMaster_(payload) {
   if (findOne_('ACCOUNTS', function(row) { return row.role === 'MASTER_ADMIN' && !row.deletedAt; })) throw appError_('CONFLICT', 'Admin Master sudah tersedia.');
   return withLock_(function() {
     var now = nowIso_(), account = { id: uuid_(), username: requireText_(payload.username, 'ID pengguna', 3, 64).toLowerCase(), displayName: requireText_(payload.displayName, 'Nama', 2, 100), role: 'MASTER_ADMIN', passwordHash: requireText_(payload.passwordHash, 'Hash password', 20, 1000), passwordEncrypted: requireText_(payload.passwordEncrypted, 'Password terenkripsi', 20, 1000), active: true, version: 1, lastLoginAt: '', createdAt: now, createdBy: 'BOOTSTRAP', updatedAt: now, updatedBy: 'BOOTSTRAP', deletedAt: '', deletedBy: '' };
-    append_('ACCOUNTS', account); audit_(null, 'accounts.bootstrapMaster', 'ACCOUNT', account.id, { username: account.username }); return { id: account.id, username: account.username };
+    append_('ACCOUNTS', account); audit_(null, 'accounts.bootstrapMaster', 'ACCOUNT', account.id, auditSummary_('@'+account.username,{},account,{username:'Username',displayName:'Nama akun',role:'Hak akses',active:'Status aktif'},['username','displayName','role','active'])); return { id: account.id, username: account.username };
   });
 }
 function sessionCreate_(payload) {
@@ -35,7 +35,7 @@ function sessionGet_(payload) {
   if (!session || new Date(session.expiresAt).getTime() <= Date.now()) throw appError_('SESSION_EXPIRED', 'Sesi telah berakhir.');
   var account = findOne_('ACCOUNTS', function(row) { return row.id === session.accountId && !row.deletedAt && bool_(row.active); });
   if (!account) throw appError_('UNAUTHENTICATED', 'Akun tidak aktif.');
-  return { accountId: account.id, username: account.username, displayName: account.displayName, role: account.role };
+  return { accountId: account.id, username: account.username, displayName: account.displayName, role: account.role, profilePhotoFileId: account.profilePhotoFileId || '' };
 }
 function csrfVerify_(payload) {
   var session = findOne_('SESSIONS', function(row) { return row.accountId === payload.accountId && row.csrfHash === payload.csrfHash && !row.revokedAt && new Date(row.expiresAt).getTime() > Date.now(); });

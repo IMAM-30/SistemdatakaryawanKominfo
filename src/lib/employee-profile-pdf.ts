@@ -1,5 +1,6 @@
 import type { EmployeeExportInput } from "@/lib/export-data";
 import { employeeName, type UiField } from "@/lib/ui-model";
+import { dateForDisplay } from "@/lib/date-format";
 
 const GROUPS = [
   { label: "Data Pribadi", keys: ["photo", "nip", "name", "nama", "fullName", "birthPlace", "birthDate", "gender", "religion", "addressCity"] },
@@ -12,8 +13,7 @@ function displayValue(value: unknown, field: UiField): string {
   if (value === null || value === undefined || value === "") return "—";
   if (typeof value === "boolean") return value ? "Ya" : "Tidak";
   if (field.type === "date" && typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
-    const date = new Date(`${value.slice(0, 10)}T00:00:00`);
-    if (!Number.isNaN(date.getTime())) return new Intl.DateTimeFormat("id-ID", { dateStyle: "long" }).format(date);
+    return dateForDisplay(value);
   }
   return typeof value === "object" ? JSON.stringify(value) : String(value);
 }

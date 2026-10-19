@@ -7,7 +7,7 @@ import { getServerEnv } from "@/lib/server/env";
 const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
 export function hashSessionToken(token: string) { return createHash("sha256").update(token).digest("base64url"); }
 
-export async function createSession(account: { id: string; username: string; displayName: string; role: Role }) {
+export async function createSession(account: { id: string; username: string; displayName: string; role: Role; profilePhotoFileId?: string }) {
   const token = randomBytes(32).toString("base64url");
   const csrfToken = randomBytes(24).toString("base64url");
   await callAppsScript("auth.sessionCreate", { accountId: account.id, tokenHash: hashSessionToken(token), csrfHash: hashSessionToken(csrfToken), expiresInSeconds: SESSION_MAX_AGE_SECONDS });
@@ -16,7 +16,7 @@ export async function createSession(account: { id: string; username: string; dis
   const common = { secure: process.env.NODE_ENV === "production", sameSite: "strict" as const, path: "/", maxAge: SESSION_MAX_AGE_SECONDS };
   store.set(cookieName, token, { ...common, httpOnly: true });
   store.set(`${cookieName}_csrf`, csrfToken, { ...common, httpOnly: false });
-  return { actor: { accountId: account.id, username: account.username, displayName: account.displayName, role: account.role }, csrfToken, expiresInSeconds: SESSION_MAX_AGE_SECONDS };
+  return { actor: { accountId: account.id, username: account.username, displayName: account.displayName, role: account.role, profilePhotoFileId: account.profilePhotoFileId || undefined }, csrfToken, expiresInSeconds: SESSION_MAX_AGE_SECONDS };
 }
 
 export async function requireSession(): Promise<SessionActor> {

@@ -1,6 +1,6 @@
 var APP = Object.freeze({
   API_VERSION: '1.0.0',
-  SCHEMA_VERSION: '2',
+  SCHEMA_VERSION: '4',
   TIMEZONE: 'Asia/Makassar',
   MAX_CLOCK_SKEW_MS: 5 * 60 * 1000,
   MAX_PHOTO_BYTES: 2 * 1024 * 1024,
@@ -11,10 +11,10 @@ var APP = Object.freeze({
     CATEGORIES: ['id', 'code', 'name', 'description', 'active', 'sortOrder', 'version', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy', 'deletedAt', 'deletedBy'],
     FIELDS: ['id', 'categoryId', 'key', 'label', 'type', 'required', 'optionsJson', 'tableVisible', 'publicVisible', 'portalVisible', 'adminVisible', 'sortOrder', 'active', 'system', 'version', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy', 'deletedAt', 'deletedBy'],
     EMPLOYEES: ['id', 'categoryId', 'dataJson', 'photoFileId', 'active', 'version', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy', 'deletedAt', 'deletedBy'],
-    ACCOUNTS: ['id', 'username', 'displayName', 'role', 'passwordHash', 'passwordEncrypted', 'active', 'version', 'lastLoginAt', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy', 'deletedAt', 'deletedBy'],
+    ACCOUNTS: ['id', 'username', 'displayName', 'role', 'passwordHash', 'passwordEncrypted', 'active', 'version', 'lastLoginAt', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy', 'deletedAt', 'deletedBy', 'profilePhotoFileId'],
     SESSIONS: ['id', 'accountId', 'tokenHash', 'csrfHash', 'expiresAt', 'createdAt', 'lastSeenAt', 'revokedAt'],
     FILES: ['id', 'employeeId', 'driveFileId', 'name', 'mimeType', 'size', 'checksum', 'state', 'createdAt', 'createdBy', 'deletedAt', 'deletedBy'],
-    AUDIT_LOGS: ['id', 'actorId', 'actorRole', 'action', 'entityType', 'entityId', 'summaryJson', 'createdAt'],
+    AUDIT_LOGS: ['id', 'actorId', 'actorRole', 'action', 'entityType', 'entityId', 'summaryJson', 'createdAt', 'actorUsername', 'actorDisplayName'],
     IDEMPOTENCY: ['requestId', 'action', 'payloadHash', 'resultJson', 'createdAt', 'expiresAt'],
     RATE_LIMITS: ['key', 'windowStartedAt', 'count', 'updatedAt']
   }

@@ -38,11 +38,13 @@ Login menggunakan hash `scrypt`. Salinan yang dapat dilihat sesuai kebutuhan pen
 - `accounts.listActiveAdmins|listAdmins|listPortal`
 - `accounts.createAdmin|updateAdmin|deleteAdmin|restoreAdmin|resetAdminPassword|revealAdminCredential`
 - `accounts.createPortal|updatePortal|deletePortal|restorePortal|resetPortalPassword|revealPortalCredential`
-- `accounts.changeOwnPassword`, `audit.list`, `export.snapshot`
+- `accounts.changeOwnPassword|updateOwnProfilePhoto`, `audit.list`, `export.snapshot`
 
 ## Snapshot dashboard
 
 `dashboard.snapshot` adalah operasi baca untuk seluruh role yang sudah login. Satu request mengembalikan `{ categories, fields, employees, admins, portals, audit, settings }`; enam properti pertama berupa array langsung, sedangkan `settings` berupa object key/value. Dashboard menggunakan snapshot ini agar pemuatan dan sinkronisasi tidak mengirim beberapa request Apps Script bersamaan. Action individual tetap tersedia.
+
+Setiap item `audit` baru menyertakan `actorUsername`, `actorDisplayName`, dan `summary: { entityName, changes[] }`. Setiap perubahan berisi `{ field, label, before, after }`; password, hash, dan nilai terenkripsi tidak pernah disimpan dalam rincian audit. Catatan lama tetap dikembalikan dalam format kompatibel dan identitas aktornya dilengkapi dari tabel akun bila masih tersedia.
 
 Scope ditentukan dari actor session yang disisipkan BFF, bukan dari filter atau role dalam payload browser:
 

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 const router = readFileSync(new URL("../apps-script/Router.gs", import.meta.url), "utf8");
 const config = readFileSync(new URL("../apps-script/Config.gs", import.meta.url), "utf8");
 const migrations = readFileSync(new URL("../apps-script/Migrations.gs", import.meta.url), "utf8");
+const audit = readFileSync(new URL("../apps-script/AuditService.gs", import.meta.url), "utf8");
 const entrypoint = readFileSync(new URL("../apps-script/Code.gs", import.meta.url), "utf8");
 const manifest = JSON.parse(readFileSync(new URL("../apps-script/appsscript.json", import.meta.url), "utf8"));
 
@@ -11,11 +12,25 @@ describe("Apps Script contract", () => {
   it.each([
     "health", "auth.lookup", "auth.bootstrapMaster", "settings.update", "categories.create", "fields.create",
     "employees.create", "files.upload", "accounts.createAdmin", "accounts.createPortal", "accounts.resetPortalPassword",
+    "accounts.updateOwnProfilePhoto",
     "audit.list", "export.snapshot",
   ])("allowlists %s", (action) => expect(router).toContain(`'${action}'`));
 
   it("defines the audit, idempotency, session, and rate-limit system tables", () => {
     for (const table of ["AUDIT_LOGS", "IDEMPOTENCY", "SESSIONS", "RATE_LIMITS"]) expect(config).toContain(`${table}:`);
+  });
+
+  it("stores an optional profile photo on accounts through a compatible schema migration", () => {
+    expect(config).toContain("profilePhotoFileId");
+    expect(migrations).toContain("migrateSheetHeaders_");
+  });
+
+  it("stores the admin username and structured before-after changes in audit logs", () => {
+    expect(config).toContain("actorUsername");
+    expect(config).toContain("actorDisplayName");
+    expect(audit).toContain("actor.username");
+    expect(audit).toContain("function auditChanges_");
+    expect(audit).toMatch(/password\|hash\|encrypted/i);
   });
 
   it("adds NIP to PPPK through the idempotent setup migration without exposing it publicly", () => {

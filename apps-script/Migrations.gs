@@ -1,8 +1,15 @@
 function setupProject() {
   return withLock_(function(){
-    var spreadsheet=spreadsheet_();Object.keys(APP.TABLES).forEach(function(name){var headers=APP.TABLES[name],sheet=spreadsheet.getSheetByName(name);if(!sheet)sheet=spreadsheet.insertSheet(name);if(sheet.getLastRow()===0){sheet.getRange(1,1,1,headers.length).setValues([headers]);sheet.setFrozenRows(1);}else{var actual=sheet.getRange(1,1,1,headers.length).getValues()[0];if(JSON.stringify(actual)!==JSON.stringify(headers))throw appError_('SCHEMA','Header sheet '+name+' tidak sesuai schema.');}});
+    var spreadsheet=spreadsheet_();Object.keys(APP.TABLES).forEach(function(name){var headers=APP.TABLES[name],sheet=spreadsheet.getSheetByName(name);if(!sheet)sheet=spreadsheet.insertSheet(name);if(sheet.getLastRow()===0){sheet.getRange(1,1,1,headers.length).setValues([headers]);sheet.setFrozenRows(1);}else{migrateSheetHeaders_(name,sheet,headers);var actual=sheet.getRange(1,1,1,headers.length).getValues()[0];if(JSON.stringify(actual)!==JSON.stringify(headers))throw appError_('SCHEMA','Header sheet '+name+' tidak sesuai schema.');}});
     upsertMeta_('schemaVersion',APP.SCHEMA_VERSION);upsertSetting_('PORTAL_MODE','LOGIN_REQUIRED','SETUP');seedCategoriesAndFields_();SpreadsheetApp.flush();return {ok:true,schemaVersion:APP.SCHEMA_VERSION};
   });
+}
+function migrateSheetHeaders_(name,sheet,headers){
+  var width=Math.max(1,sheet.getLastColumn()),actual=sheet.getRange(1,1,1,width).getValues()[0];
+  while(actual.length&&actual[actual.length-1]==='')actual.pop();
+  if(actual.length>=headers.length)return;
+  for(var i=0;i<actual.length;i++){if(actual[i]!==headers[i])throw appError_('SCHEMA','Header sheet '+name+' tidak sesuai schema.');}
+  sheet.getRange(1,actual.length+1,1,headers.length-actual.length).setValues([headers.slice(actual.length)]);
 }
 function ensureCurrentSchema_(){
   var cache=CacheService.getScriptCache(),cacheKey='schema-version';

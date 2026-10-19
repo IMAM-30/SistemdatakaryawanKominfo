@@ -18,25 +18,46 @@ const fields = [
   { id: "field-photo", categoryId: "category-pns", key: "photo", label: "Foto", type: "photo", required: false, tableVisible: false, publicVisible: true, portalVisible: true, adminVisible: true, sortOrder: 0, active: true, system: true, version: 1 },
   { id: "field-name", categoryId: "category-pns", key: "name", label: "Nama Lengkap", type: "text", required: true, tableVisible: true, publicVisible: true, portalVisible: true, adminVisible: true, sortOrder: 1, active: true, system: true, version: 1 },
   { id: "field-nip", categoryId: "category-pns", key: "nip", label: "NIP", type: "text", required: true, tableVisible: true, publicVisible: false, portalVisible: true, adminVisible: true, sortOrder: 2, active: true, system: true, version: 1 },
+  { id: "field-birth-date", categoryId: "category-pns", key: "birthDate", label: "Tanggal Lahir", type: "date", required: false, tableVisible: false, publicVisible: true, portalVisible: true, adminVisible: true, sortOrder: 2.5, active: true, system: true, version: 1 },
   { id: "field-position", categoryId: "category-pns", key: "position", label: "Jabatan", type: "text", required: false, tableVisible: true, publicVisible: true, portalVisible: true, adminVisible: true, sortOrder: 3, active: true, system: false, version: 1 },
   { id: "field-pppk-name", categoryId: "category-pppk", key: "name", label: "Nama", type: "text", required: true, tableVisible: true, publicVisible: true, portalVisible: true, adminVisible: true, sortOrder: 1, active: true, system: true, version: 1 },
   { id: "field-pppk-nip", categoryId: "category-pppk", key: "nip", label: "NIP", type: "text", required: true, tableVisible: true, publicVisible: false, portalVisible: true, adminVisible: true, sortOrder: 2, active: true, system: true, version: 1 },
 ];
 
 const employees = [
-  { id: "employee-1", categoryId: "category-pns", data: { name: "Aisyah Rahma", nip: "199001012020122001", position: "Pranata Humas" }, photoFileId: "photo-1", active: true, version: 1 },
+  { id: "employee-1", categoryId: "category-pns", data: { name: "Aisyah Rahma", nip: "199001012020122001", birthDate: "1990-12-03", position: "Pranata Humas" }, photoFileId: "photo-1", active: true, version: 1 },
   { id: "employee-2", categoryId: "category-pppk", data: { name: "Fajar Akbar", position: "Pengelola Sistem" }, active: true, version: 1 },
   { id: "employee-archive", categoryId: "category-pns", data: { name: "Rahma Arsip", nip: "198812122010012001" }, active: false, version: 2, deletedAt: "2026-09-29T00:00:00.000Z" },
 ];
 
-async function mockDashboard(page: Page, actions: string[] = []) {
-  await page.route("**/api/auth/session", (route) => route.fulfill({ json: { ok: true, data: { actor } } }));
+const audit = [{
+  id: "audit-1",
+  actorId: actor.accountId,
+  actorRole: actor.role,
+  actorUsername: actor.username,
+  actorDisplayName: actor.displayName,
+  action: "employees.update",
+  entityType: "EMPLOYEE",
+  entityId: "employee-1",
+  summary: {
+    entityName: "Aisyah Rahma",
+    changes: [{ field: "position", label: "Jabatan", before: "Staf", after: "Pranata Humas" }],
+  },
+  createdAt: "2026-10-19T02:00:00.000Z",
+}];
+
+async function mockDashboard(page: Page, actions: string[] = [], requests: Array<{ action: string; payload: Record<string, unknown> }> = []) {
+  let currentActor: typeof actor & { profilePhotoFileId?: string } = { ...actor };
+  await page.route("**/api/auth/session", (route) => route.fulfill({ json: { ok: true, data: { actor: currentActor } } }));
   await page.route("**/api/backend", async (route) => {
-    const { action } = route.request().postDataJSON() as { action: string };
+    const { action, payload = {} } = route.request().postDataJSON() as { action: string; payload?: Record<string, unknown> };
     actions.push(action);
+    requests.push({ action, payload });
+    if (action === "accounts.updateOwnProfilePhoto") currentActor = { ...currentActor, profilePhotoFileId: String(payload.profilePhotoFileId) };
     const data: Record<string, unknown> = {
-      "dashboard.snapshot": { categories, fields, employees, admins: [], portals: [{ id: "portal-1", username: "portalpegawai", displayName: "Portal Pegawai", role: "PORTAL", active: true, version: 1 }], audit: [], settings: { PORTAL_MODE: "LOGIN_REQUIRED" } },
+      "dashboard.snapshot": { categories, fields, employees, admins: [], portals: [{ id: "portal-1", username: "portalpegawai", displayName: "Portal Pegawai", role: "PORTAL", active: true, version: 1 }], audit, settings: { PORTAL_MODE: "LOGIN_REQUIRED" } },
       "files.get": { mimeType: "image/gif", base64: "R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" },
+      "files.upload": { id: "profile-photo-new" },
       "export.snapshot": { categories, fields, employees },
       "employees.restore": { ...employees[2], deletedAt: "", active: true, version: 3 },
     };
@@ -125,7 +146,12 @@ test("PDF exports download directly with stroked table borders", async ({ page }
   const content = (await readFile((await download.path())!)).toString("latin1");
   expect(content).toMatch(/^%PDF-/);
   const borders = content.match(/[-\d.]+ [-\d.]+ [-\d.]+ [-\d.]+ re\s+S(?:\s|$)/g) ?? [];
-  expect(borders).toHaveLength(20);
+  const expectedBorders = categories.reduce((total, category) => {
+    const columns = fields.filter((field) => field.categoryId === category.id && field.active && field.type !== "photo").length + 2;
+    const rows = employees.filter((employee) => employee.categoryId === category.id && !employee.deletedAt).length;
+    return total + columns * (rows + 1);
+  }, 0);
+  expect(borders).toHaveLength(expectedBorders);
   expect(content).toContain("Aisyah Rahma");
   expect(content).toContain("Fajar Akbar");
   await expect(page.getByRole("heading", { name: "Unduh data pegawai" })).toBeHidden();
@@ -171,6 +197,53 @@ test("dashboard loads real workspace states and navigates to employee data", asy
   const pppkRow = page.getByRole("row").filter({ hasText: "Fajar Akbar" });
   await pppkRow.getByTitle("Edit").click();
   await expect(page.getByLabel("NIP")).toBeVisible();
+});
+
+test("system activity explains who changed which value from before to after", async ({ page }) => {
+  await mockDashboard(page);
+  await page.goto("/dashboard");
+  await page.getByRole("button", { name: "Aktivitas", exact: true }).click();
+
+  await expect(page.getByText("Data pegawai diperbarui", { exact: true })).toBeVisible();
+  await expect(page.getByText("Aisyah Rahma", { exact: true })).toBeVisible();
+  await expect(page.getByText("Admin Master Kominfo (@masterkominfo)", { exact: true })).toBeVisible();
+  const change = page.locator(".audit-changes").getByText("Jabatan", { exact: true }).locator("..");
+  await expect(change.getByText("Staf", { exact: true })).toBeVisible();
+  await expect(change.getByText("Pranata Humas", { exact: true })).toBeVisible();
+
+  await page.getByPlaceholder("Cari aktivitas, data, atau username admin").fill("masterkominfo");
+  await expect(page.locator(".audit-timeline article")).toHaveCount(1);
+  await expectNoHorizontalOverflow(page);
+});
+
+test("existing dates use DD/MM/YYYY in detail and edit without changing the ISO storage contract", async ({ page }) => {
+  const requests: Array<{ action: string; payload: Record<string, unknown> }> = [];
+  await mockDashboard(page, [], requests);
+  await page.goto("/dashboard");
+  await page.getByRole("button", { name: "Data Pegawai" }).click();
+  const row = page.getByRole("row").filter({ hasText: "Aisyah Rahma" });
+  await row.getByTitle("Lihat detail").click();
+  await expect(page.getByRole("dialog", { name: "Detail pegawai" }).getByText("03/12/1990", { exact: true })).toBeVisible();
+  await page.getByRole("dialog", { name: "Detail pegawai" }).getByRole("button", { name: "Edit data" }).click();
+  const date = page.getByLabel("Tanggal Lahir");
+  await expect(date).toHaveValue("03/12/1990");
+  await date.fill("05/11/1991");
+  await page.getByRole("button", { name: /Lanjut/ }).click();
+  await page.getByRole("button", { name: /Simpan data/ }).click();
+  await page.getByRole("button", { name: "Ya, simpan" }).click();
+  await expect.poll(() => requests.find((request) => request.action === "employees.update")?.payload).toMatchObject({ data: { birthDate: "1991-11-05" } });
+});
+
+test("admin can replace the account profile photo from settings", async ({ page }) => {
+  const actions: string[] = [];
+  await mockDashboard(page, actions);
+  await page.goto("/dashboard");
+  await page.getByRole("button", { name: "Pengaturan" }).click();
+  await page.getByLabel("Pilih foto").setInputFiles({ name: "profil.png", mimeType: "image/png", buffer: Buffer.from("89504e470d0a1a0a", "hex") });
+  await page.getByRole("button", { name: "Simpan foto" }).click();
+  await expect(page.getByText("Foto profil berhasil diperbarui.")).toBeVisible();
+  await expect.poll(() => actions).toEqual(expect.arrayContaining(["files.upload", "accounts.updateOwnProfilePhoto"]));
+  await expect(page.locator(".topbar-account .avatar img")).toHaveAttribute("src", /^data:image\/gif;base64,/);
 });
 
 test("employee detail highlights its category and supports readable text and fullscreen photo", async ({ page }) => {

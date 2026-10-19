@@ -7,7 +7,7 @@ const ADMIN_ACTIONS = new Set([
   "fields.create", "fields.update", "fields.delete", "fields.restore", "employees.create", "employees.update", "employees.delete",
   "employees.restore", "files.upload", "files.delete", "audit.list", "accounts.listActiveAdmins", "accounts.listPortal",
   "accounts.createPortal", "accounts.updatePortal", "accounts.deletePortal", "accounts.restorePortal", "accounts.revealPortalCredential",
-  "accounts.resetPortalPassword", "accounts.changeOwnPassword", "export.snapshot",
+  "accounts.resetPortalPassword", "accounts.changeOwnPassword", "accounts.updateOwnProfilePhoto", "export.snapshot",
 ]);
 const MASTER_ACTIONS = new Set([
   "accounts.listAdmins", "accounts.createAdmin", "accounts.updateAdmin", "accounts.deleteAdmin", "accounts.restoreAdmin",

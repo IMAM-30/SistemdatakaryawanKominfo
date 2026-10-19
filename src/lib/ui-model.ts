@@ -1,4 +1,5 @@
 import type { Role } from "@/lib/domain/types";
+import { dateForDisplay } from "@/lib/date-format";
 
 export type ThemeMode = "light" | "dark";
 
@@ -49,6 +50,7 @@ export interface UiAccount {
   username: string;
   displayName: string;
   role: Role;
+  profilePhotoFileId?: string;
   active: boolean;
   version: number;
   lastLoginAt?: string;
@@ -60,10 +62,12 @@ export interface UiAudit {
   id: string;
   actorId: string;
   actorRole: string;
+  actorUsername?: string;
+  actorDisplayName?: string;
   action: string;
   entityType: string;
   entityId: string;
-  summary?: Record<string, unknown>;
+  summary?: Record<string, unknown> & { entityName?: string; changes?: Array<{ field?: string; label?: string; before?: unknown; after?: unknown }> };
   createdAt: string;
 }
 
@@ -149,7 +153,7 @@ export function buildExportSheets(categories: UiCategory[], fields: UiField[], e
         headers: ["No.", ...categoryFields.map((field) => field.label), "Status"],
         rows: categoryEmployees.map((employee, index) => [
           index + 1,
-          ...categoryFields.map((field) => exportCell(employee.data[field.key])),
+          ...categoryFields.map((field) => field.type === "date" && typeof employee.data[field.key] === "string" ? dateForDisplay(employee.data[field.key] as string) : exportCell(employee.data[field.key])),
           employee.active ? "Aktif" : "Tidak aktif",
         ]),
       };
